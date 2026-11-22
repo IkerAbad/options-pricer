@@ -3,6 +3,8 @@
 [![ci](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml/badge.svg)](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-333?style=flat-square)](LICENSE)
 
+API reference: **https://ikerabad.github.io/options-pricer/**
+
 European, American and path-dependent option pricing in Python: closed-form
 Black-Scholes, Monte Carlo with antithetic variates, implied volatility by root
 finding, SVI calibration across a term structure, a binomial tree for early
