@@ -149,7 +149,7 @@ def calibrate(
     ks: list[float] = []
     widths: list[float] = []
 
-    for strike, quoted in zip(strikes, prices):
+    for strike, quoted in zip(strikes, prices, strict=True):
         try:
             vol = implied_volatility(quoted, spot, strike, rate, expiry, option_type)
         except ValueError:
@@ -174,23 +174,19 @@ def _fit(
 ) -> tuple[SviParams, float]:
     calendar_grid = np.linspace(-1.0, 1.0, 41)
     floor_values = (
-        np.array([total_variance(k, floor) for k in calendar_grid])
-        if floor is not None
-        else None
+        np.array([total_variance(k, floor) for k in calendar_grid]) if floor is not None else None
     )
 
     def residuals(theta: np.ndarray) -> np.ndarray:
         candidate = SviParams(*[float(value) for value in theta])
         market = np.array(
-            [total_variance(k, candidate) - w for k, w in zip(ks, widths)], dtype=float
+            [total_variance(k, candidate) - w for k, w in zip(ks, widths, strict=True)], dtype=float
         )
         shrink = ridge * (theta - guess)
         parts = [market, shrink]
 
         if floor_values is not None:
-            candidate_values = np.array(
-                [total_variance(k, candidate) for k in calendar_grid]
-            )
+            candidate_values = np.array([total_variance(k, candidate) for k in calendar_grid])
             parts.append(floor_weight * np.maximum(0.0, floor_values - candidate_values))
 
         return np.concatenate(parts)
@@ -198,9 +194,7 @@ def _fit(
     if initial is None:
         guess = np.array([max(min(widths) * 0.8, 1e-3), 0.10, -0.30, 0.0, 0.10])
     else:
-        guess = np.array(
-            [initial.a, initial.b, initial.rho, initial.m, initial.sigma], dtype=float
-        )
+        guess = np.array([initial.a, initial.b, initial.rho, initial.m, initial.sigma], dtype=float)
 
     lower = np.array([-0.05, 0.0, -0.999, -0.5, 0.01])
     upper = np.array([0.30, 1.0, 0.999, 0.5, 0.50])
@@ -211,7 +205,7 @@ def _fit(
 
     squared_errors = [
         (svi_implied_vol(k, expiry, params) - math.sqrt(w / expiry)) ** 2
-        for k, w in zip(ks, widths)
+        for k, w in zip(ks, widths, strict=True)
     ]
     rmse = math.sqrt(sum(squared_errors) / len(squared_errors))
     return params, rmse
@@ -237,9 +231,7 @@ def _fit_hard(
     if initial is None:
         guess = np.array([max(min(widths) * 0.8, 1e-3), 0.10, -0.30, 0.0, 0.10])
     else:
-        guess = np.array(
-            [initial.a, initial.b, initial.rho, initial.m, initial.sigma], dtype=float
-        )
+        guess = np.array([initial.a, initial.b, initial.rho, initial.m, initial.sigma], dtype=float)
 
     lower = np.array([-0.05, 0.0, -0.999, -0.5, 0.01])
     upper = np.array([0.30, 1.0, 0.999, 0.5, 0.50])
@@ -248,7 +240,7 @@ def _fit_hard(
     def objective(theta: np.ndarray) -> float:
         candidate = SviParams(*[float(value) for value in theta])
         market = sum(
-            (total_variance(k, candidate) - w) ** 2 for k, w in zip(ks, widths)
+            (total_variance(k, candidate) - w) ** 2 for k, w in zip(ks, widths, strict=True)
         )
         shrink = ridge * float(np.sum((theta - guess) ** 2))
         return market + shrink
@@ -256,14 +248,17 @@ def _fit_hard(
     def constraint(theta: np.ndarray) -> np.ndarray:
         candidate = SviParams(*[float(value) for value in theta])
         return np.array(
-            [total_variance(k, candidate) - value for k, value in zip(grid, floor_values)]
+            [
+                total_variance(k, candidate) - value
+                for k, value in zip(grid, floor_values, strict=True)
+            ]
         )
 
     result = minimize(
         objective,
         guess,
         method="SLSQP",
-        bounds=list(zip(lower, upper)),
+        bounds=list(zip(lower, upper, strict=True)),
         constraints=[{"type": "ineq", "fun": constraint}],
         options={"maxiter": 1_000, "ftol": 1e-12},
     )
@@ -271,7 +266,7 @@ def _fit_hard(
     params = SviParams(*[float(value) for value in result.x])
     squared_errors = [
         (svi_implied_vol(k, expiry, params) - math.sqrt(w / expiry)) ** 2
-        for k, w in zip(ks, widths)
+        for k, w in zip(ks, widths, strict=True)
     ]
     rmse = math.sqrt(sum(squared_errors) / len(squared_errors))
     return params, rmse
@@ -304,9 +299,7 @@ def calibrate_from_vols(
     if hard_calendar and floor is not None:
         return _fit_hard(expiry, log_moneyness, widths, initial, ridge, floor)
 
-    return _fit(
-        expiry, log_moneyness, widths, initial, ridge, floor, floor_weight
-    )
+    return _fit(expiry, log_moneyness, widths, initial, ridge, floor, floor_weight)
 
 
 def calibrate_surface(
@@ -326,10 +319,17 @@ def calibrate_surface(
     rows: list[tuple[float, SviParams, float]] = []
     previous: SviParams | None = None
 
-    for expiry, quotes in sorted(zip(expiries, prices_by_expiry)):
+    for expiry, quotes in sorted(zip(expiries, prices_by_expiry, strict=True)):
         params, rmse = calibrate(
-            spot, rate, expiry, strikes, quotes, option_type,
-            initial=previous, ridge=1e-2, floor=previous,
+            spot,
+            rate,
+            expiry,
+            strikes,
+            quotes,
+            option_type,
+            initial=previous,
+            ridge=1e-2,
+            floor=previous,
         )
         previous = params
         rows.append((expiry, params, rmse))
@@ -361,7 +361,7 @@ def synthetic_surface(
             noise=noise,
             seed=seed + index,
         )
-        for index, (expiry, params) in enumerate(zip(expiries, params_by_expiry))
+        for index, (expiry, params) in enumerate(zip(expiries, params_by_expiry, strict=True))
     ]
 
 
@@ -373,4 +373,3 @@ def example_term_structure() -> dict[float, SviParams]:
         1.00: SviParams(a=0.032, b=0.10, rho=-0.38, m=-0.06, sigma=0.15),
         2.00: SviParams(a=0.060, b=0.11, rho=-0.32, m=-0.08, sigma=0.18),
     }
-

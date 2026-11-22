@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 
 from .american import binomial
 from .black_scholes import greeks, price
@@ -95,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "mc":
-        result = price_european(
+        mc_result = price_european(
             args.type,
             args.spot,
             args.strike,
@@ -105,10 +104,10 @@ def main(argv: list[str] | None = None) -> int:
             paths=args.paths,
             seed=args.seed,
         )
-        print(f"price  {result.price:.6f}")
-        print(f"stderr {result.standard_error:.6f}")
-        print(f"95% ci [{result.ci_low:.6f}, {result.ci_high:.6f}]")
-        print(f"paths  {result.paths}")
+        print(f"price  {mc_result.price:.6f}")
+        print(f"stderr {mc_result.standard_error:.6f}")
+        print(f"95% ci [{mc_result.ci_low:.6f}, {mc_result.ci_high:.6f}]")
+        print(f"paths  {mc_result.paths}")
         return 0
 
     if args.command == "iv":
@@ -119,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "american":
-        result = binomial(
+        american_result = binomial(
             args.type,
             args.spot,
             args.strike,
@@ -129,29 +128,44 @@ def main(argv: list[str] | None = None) -> int:
             steps=args.steps,
             dividend_yield=args.dividend,
         )
-        print(f"american  {result.american:.6f}")
-        print(f"european  {result.european:.6f}")
-        print(f"premium   {result.premium:.6f}")
-        print(f"steps     {result.steps}")
+        print(f"american  {american_result.american:.6f}")
+        print(f"european  {american_result.european:.6f}")
+        print(f"premium   {american_result.premium:.6f}")
+        print(f"steps     {american_result.steps}")
         return 0
 
     if args.command == "asian":
-        result = asian_price(
-            args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
-            steps=args.steps, paths=args.paths, seed=args.seed,
+        asian_result = asian_price(
+            args.type,
+            args.spot,
+            args.strike,
+            args.rate,
+            args.vol,
+            args.expiry,
+            steps=args.steps,
+            paths=args.paths,
+            seed=args.seed,
         )
-        print(f"price  {result.price:.6f}")
-        print(f"stderr {result.standard_error:.6f}")
-        print(f"95% ci [{result.ci_low:.6f}, {result.ci_high:.6f}]")
-        print(f"paths  {result.paths}  steps {result.steps}")
+        print(f"price  {asian_result.price:.6f}")
+        print(f"stderr {asian_result.standard_error:.6f}")
+        print(f"95% ci [{asian_result.ci_low:.6f}, {asian_result.ci_high:.6f}]")
+        print(f"paths  {asian_result.paths}  steps {asian_result.steps}")
         return 0
 
     if args.command == "barrier":
         if args.greeks:
             values = barrier_greeks(
-                args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
-                barrier=args.barrier, kind=args.kind, steps=args.steps,
-                paths=args.paths, seed=args.seed,
+                args.type,
+                args.spot,
+                args.strike,
+                args.rate,
+                args.vol,
+                args.expiry,
+                barrier=args.barrier,
+                kind=args.kind,
+                steps=args.steps,
+                paths=args.paths,
+                seed=args.seed,
             )
             print(f"price  {values.price:.6f}")
             print(f"delta  {values.delta:.6f}")
@@ -160,14 +174,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"kind   {args.kind} at {args.barrier}")
             return 0
 
-        result = barrier_price(
-            args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
-            barrier=args.barrier, kind=args.kind, steps=args.steps,
-            paths=args.paths, seed=args.seed,
+        barrier_result = barrier_price(
+            args.type,
+            args.spot,
+            args.strike,
+            args.rate,
+            args.vol,
+            args.expiry,
+            barrier=args.barrier,
+            kind=args.kind,
+            steps=args.steps,
+            paths=args.paths,
+            seed=args.seed,
         )
-        print(f"price  {result.price:.6f}")
-        print(f"stderr {result.standard_error:.6f}")
-        print(f"95% ci [{result.ci_low:.6f}, {result.ci_high:.6f}]")
+        print(f"price  {barrier_result.price:.6f}")
+        print(f"stderr {barrier_result.standard_error:.6f}")
+        print(f"95% ci [{barrier_result.ci_low:.6f}, {barrier_result.ci_high:.6f}]")
         print(f"kind   {args.kind} at {args.barrier}")
         return 0
 
@@ -190,9 +212,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
-    prices = synthetic_market(
-        args.spot, args.rate, args.expiry, strikes, truth, noise=args.noise
-    )
+    prices = synthetic_market(args.spot, args.rate, args.expiry, strikes, truth, noise=args.noise)
     fitted, rmse = calibrate(args.spot, args.rate, args.expiry, strikes, prices)
     print(f"a      {fitted.a:.6f}")
     print(f"b      {fitted.b:.6f}")

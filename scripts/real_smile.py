@@ -6,7 +6,7 @@ Usage:
 
 from __future__ import annotations
 
-import math
+import argparse
 from collections import defaultdict
 from pathlib import Path
 
@@ -36,7 +36,13 @@ GRID = "#e2e2e2"
 
 
 def main() -> None:
-    quotes = load_chain(DATA)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=DATA)
+    parser.add_argument("--label", default="BTC")
+    parser.add_argument("--output", type=Path, default=DOCS / "real_smile.png")
+    args = parser.parse_args()
+
+    quotes = load_chain(args.input)
 
     by_expiry: dict[str, list[Quote]] = defaultdict(list)
     for quote in quotes:
@@ -54,8 +60,13 @@ def main() -> None:
             continue
 
         params, rmse = calibrate_from_vols(
-            current.years, current.log_moneyness, current.vols,
-            initial=previous, ridge=1e-2, floor=previous, hard_calendar=True,
+            current.years,
+            current.log_moneyness,
+            current.vols,
+            initial=previous,
+            ridge=1e-2,
+            floor=previous,
+            hard_calendar=True,
         )
         previous = params
         fits[expiry] = (current, params, rmse)
@@ -69,7 +80,7 @@ def main() -> None:
         raise SystemExit("no slice could be calibrated")
 
     ordered_fits = [(expiry, fits[expiry][1]) for expiry, _ in ordered if expiry in fits]
-    for (first, short), (second, long) in zip(ordered_fits, ordered_fits[1:]):
+    for (first, short), (second, long) in zip(ordered_fits, ordered_fits[1:], strict=False):
         gap = calendar_gap(short, long, -1.0, 1.0)
         flag = "ok" if gap >= -1e-6 else "ARBITRAGE"
         print(f"calendar {first} -> {second}: {gap:+.2e}  {flag}")
@@ -77,13 +88,9 @@ def main() -> None:
     target = ordered[0][0]
     current, params, rmse = fits[target]
 
-    ks_grid = np.linspace(
-        min(current.log_moneyness) - 0.05, max(current.log_moneyness) + 0.05, 300
-    )
+    ks_grid = np.linspace(min(current.log_moneyness) - 0.05, max(current.log_moneyness) + 0.05, 300)
     curve_strikes = current.forward * np.exp(ks_grid)
-    curve_vols = [
-        svi_implied_vol(float(k), current.years, params) for k in ks_grid
-    ]
+    curve_vols = [svi_implied_vol(float(k), current.years, params) for k in ks_grid]
 
     fig, ax = plt.subplots(figsize=(7.8, 4.4), dpi=140)
     ax.plot(curve_strikes, curve_vols, color=BLUE, linewidth=1.4, label="SVI fit")
@@ -98,7 +105,7 @@ def main() -> None:
     ax.set_xlabel("strike (USDT)")
     ax.set_ylabel("implied volatility")
     ax.set_title(
-        f"BTC options, {target} expiry, {len(current.vols)} quotes, "
+        f"{args.label} options, {target} expiry, {len(current.vols)} quotes, "
         f"RMSE {rmse * 100:.2f} vol points"
     )
     ax.grid(color=GRID, linewidth=0.6)
@@ -106,10 +113,10 @@ def main() -> None:
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     fig.tight_layout()
-    DOCS.mkdir(parents=True, exist_ok=True)
-    fig.savefig(DOCS / "real_smile.png")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(args.output)
     plt.close(fig)
-    print(f"wrote {DOCS / 'real_smile.png'}")
+    print(f"wrote {args.output}")
 
 
 if __name__ == "__main__":

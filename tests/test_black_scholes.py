@@ -68,15 +68,11 @@ def test_second_order_greeks_match_finite_differences() -> None:
 
     vega_spot_up = greeks("call", SPOT + step, STRIKE, RATE, VOL, EXPIRY).vega
     vega_spot_down = greeks("call", SPOT - step, STRIKE, RATE, VOL, EXPIRY).vega
-    assert base.vanna == pytest.approx(
-        (vega_spot_up - vega_spot_down) / (2.0 * step), rel=1e-4
-    )
+    assert base.vanna == pytest.approx((vega_spot_up - vega_spot_down) / (2.0 * step), rel=1e-4)
 
     vega_vol_up = greeks("call", SPOT, STRIKE, RATE, VOL + step, EXPIRY).vega
     vega_vol_down = greeks("call", SPOT, STRIKE, RATE, VOL - step, EXPIRY).vega
-    assert base.volga == pytest.approx(
-        (vega_vol_up - vega_vol_down) / (2.0 * step), rel=1e-4
-    )
+    assert base.volga == pytest.approx((vega_vol_up - vega_vol_down) / (2.0 * step), rel=1e-4)
 
     delta_expiry_up = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY + step).delta
     delta_expiry_down = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY - step).delta

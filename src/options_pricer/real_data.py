@@ -7,6 +7,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
+from .black_scholes import OptionType
 from .implied_vol import implied_volatility
 
 
@@ -81,7 +82,7 @@ def build_slice(
         if not (min_moneyness * forward <= quote.strike <= max_moneyness * forward):
             continue
 
-        kind = "call" if quote.side == "C" else "put"
+        kind: OptionType = "call" if quote.side == "C" else "put"
         try:
             vol = implied_volatility(quote.mid, forward, quote.strike, 0.0, years, kind)
         except ValueError:

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from options_pricer.black_scholes import call_price, put_price

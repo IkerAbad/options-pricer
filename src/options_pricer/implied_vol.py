@@ -46,9 +46,7 @@ def implied_volatility(
 
     floor = intrinsic_value(option_type, spot, strike, rate, expiry)
     if target_price < floor - 1e-12:
-        raise ValueError(
-            f"price {target_price:.6f} is below the intrinsic value {floor:.6f}"
-        )
+        raise ValueError(f"price {target_price:.6f} is below the intrinsic value {floor:.6f}")
 
     def gap(vol: float) -> float:
         return black_scholes.price(option_type, spot, strike, rate, vol, expiry) - target_price

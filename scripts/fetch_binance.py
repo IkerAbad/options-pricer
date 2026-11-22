@@ -13,7 +13,7 @@ import argparse
 import csv
 import json
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 BASE = "https://eapi.binance.com/eapi/v1"
@@ -29,6 +29,7 @@ def get_json(url: str) -> object:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--underlying", default="BTCUSDT")
     parser.add_argument("--expiries", type=int, default=3)
     parser.add_argument("--min-days", type=float, default=7.0)
     parser.add_argument("--max-days", type=float, default=200.0)
@@ -36,17 +37,19 @@ def main() -> None:
 
     info = get_json(f"{BASE}/exchangeInfo")
     tickers = {item["symbol"]: item for item in get_json(f"{BASE}/ticker")}
-    index_price = float(get_json(f"{BASE}/index?underlying=BTCUSDT")["indexPrice"])
+    index_price = float(get_json(f"{BASE}/index?underlying={args.underlying}")["indexPrice"])
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     captured_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     instruments = []
     for item in info["optionSymbols"]:
         if item.get("status") != "TRADING":
             continue
+        if item.get("underlying") != args.underlying:
+            continue
 
-        expiry = datetime.fromtimestamp(item["expiryDate"] / 1000.0, tz=timezone.utc)
+        expiry = datetime.fromtimestamp(item["expiryDate"] / 1000.0, tz=UTC)
         days = (expiry - now).total_seconds() / 86400.0
         if not (args.min_days <= days <= args.max_days):
             continue

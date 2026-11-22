@@ -46,7 +46,9 @@ def _validate(spot: float, strike: float, vol: float, expiry: float) -> None:
         raise ValueError("expiry must be positive, in years")
 
 
-def _d1_d2(spot: float, strike: float, rate: float, vol: float, expiry: float) -> tuple[float, float]:
+def _d1_d2(
+    spot: float, strike: float, rate: float, vol: float, expiry: float
+) -> tuple[float, float]:
     sqrt_t = math.sqrt(expiry)
     d1 = (math.log(spot / strike) + (rate + 0.5 * vol * vol) * expiry) / (vol * sqrt_t)
     return d1, d1 - vol * sqrt_t

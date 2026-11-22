@@ -36,8 +36,17 @@ def test_asian_is_cheaper_than_european_for_a_call() -> None:
 
 def test_barrier_far_away_matches_the_european_price() -> None:
     result = barrier_price(
-        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=1_000.0,
-        kind="up-and-out", steps=50, paths=100_000, seed=5,
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=1_000.0,
+        kind="up-and-out",
+        steps=50,
+        paths=100_000,
+        seed=5,
     )
     analytic = call_price(SPOT, STRIKE, RATE, VOL, EXPIRY)
     assert result.price == pytest.approx(analytic, abs=0.08)
@@ -46,24 +55,60 @@ def test_barrier_far_away_matches_the_european_price() -> None:
 def test_up_and_out_barrier_reduces_the_price() -> None:
     european = call_price(SPOT, STRIKE, RATE, VOL, EXPIRY)
     tight = barrier_price(
-        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=110.0,
-        kind="up-and-out", steps=100, paths=50_000, seed=5,
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=110.0,
+        kind="up-and-out",
+        steps=100,
+        paths=50_000,
+        seed=5,
     )
     loose = barrier_price(
-        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=180.0,
-        kind="up-and-out", steps=100, paths=50_000, seed=5,
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=180.0,
+        kind="up-and-out",
+        steps=100,
+        paths=50_000,
+        seed=5,
     )
     assert tight.price < loose.price < european
 
 
 def test_in_and_out_add_up_to_the_european_price() -> None:
     out = barrier_price(
-        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0,
-        kind="up-and-out", steps=100, paths=300_000, seed=11,
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        kind="up-and-out",
+        steps=100,
+        paths=300_000,
+        seed=11,
     )
     into = barrier_price(
-        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0,
-        kind="up-and-in", steps=100, paths=300_000, seed=11,
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        kind="up-and-in",
+        steps=100,
+        paths=300_000,
+        seed=11,
     )
     total = out.price + into.price
     european = call_price(SPOT, STRIKE, RATE, VOL, EXPIRY)
@@ -72,12 +117,30 @@ def test_in_and_out_add_up_to_the_european_price() -> None:
 
 def test_same_seed_same_price() -> None:
     first = barrier_price(
-        "put", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=80.0,
-        kind="down-and-out", steps=50, paths=10_000, seed=9,
+        "put",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=80.0,
+        kind="down-and-out",
+        steps=50,
+        paths=10_000,
+        seed=9,
     )
     second = barrier_price(
-        "put", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=80.0,
-        kind="down-and-out", steps=50, paths=10_000, seed=9,
+        "put",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=80.0,
+        kind="down-and-out",
+        steps=50,
+        paths=10_000,
+        seed=9,
     )
     assert first == second
 
@@ -90,10 +153,6 @@ def test_invalid_inputs() -> None:
     with pytest.raises(ValueError):
         simulate_paths(SPOT, RATE, VOL, EXPIRY, steps=0)
     with pytest.raises(ValueError):
-        barrier_price(
-            "call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0, kind="sideways"
-        )
+        barrier_price("call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0, kind="sideways")
     with pytest.raises(ValueError):
-        barrier_price(
-            "straddle", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0
-        )
+        barrier_price("straddle", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0)

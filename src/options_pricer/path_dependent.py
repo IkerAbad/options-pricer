@@ -59,9 +59,7 @@ def simulate_paths(
     increments = (rate - 0.5 * vol * vol) * dt + vol * math.sqrt(dt) * shocks
     log_paths = np.cumsum(increments, axis=1)
 
-    return spot * np.exp(
-        np.hstack([np.zeros((paths, 1), dtype=float), log_paths])
-    )
+    return spot * np.exp(np.hstack([np.zeros((paths, 1), dtype=float), log_paths]))
 
 
 def _summarise(
@@ -169,8 +167,17 @@ def barrier_greeks(
 
     def price_at(new_spot: float, new_vol: float, new_expiry: float) -> float:
         return barrier_price(
-            option_type, new_spot, strike, rate, new_vol, new_expiry,
-            barrier, kind, steps, paths, seed,
+            option_type,
+            new_spot,
+            strike,
+            rate,
+            new_vol,
+            new_expiry,
+            barrier,
+            kind,
+            steps,
+            paths,
+            seed,
         ).price
 
     base = price_at(spot, vol, expiry)

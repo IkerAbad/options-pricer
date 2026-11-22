@@ -47,9 +47,7 @@ def convergence(path: Path) -> None:
     errors = []
 
     for count in counts:
-        result = price_european(
-            "call", SPOT, STRIKE, RATE, VOL, EXPIRY, paths=count, seed=7
-        )
+        result = price_european("call", SPOT, STRIKE, RATE, VOL, EXPIRY, paths=count, seed=7)
         prices.append(result.price)
         errors.append(1.96 * result.standard_error)
 
@@ -66,9 +64,7 @@ def convergence(path: Path) -> None:
         markersize=4,
         label="Monte Carlo, 95% interval",
     )
-    ax.axhline(
-        analytic, color=RED, linewidth=1.2, label=f"Black-Scholes {analytic:.4f}"
-    )
+    ax.axhline(analytic, color=RED, linewidth=1.2, label=f"Black-Scholes {analytic:.4f}")
     ax.set_xscale("log")
     ax.set_xlabel("paths")
     ax.set_ylabel("call price")
@@ -88,14 +84,12 @@ def smile(path: Path) -> None:
     rate = 0.03
     expiry = 1.0
 
-    quotes = synthetic_market(
-        SPOT, rate, expiry, strikes, truth, noise=0.001, seed=1
-    )
+    quotes = synthetic_market(SPOT, rate, expiry, strikes, truth, noise=0.001, seed=1)
     fitted, rmse = calibrate(SPOT, rate, expiry, strikes, quotes)
 
     market_vols = [
         implied_volatility(quoted, SPOT, strike, rate, expiry, "call")
-        for strike, quoted in zip(strikes, quotes)
+        for strike, quoted in zip(strikes, quotes, strict=True)
     ]
 
     forward = SPOT * math.exp(rate * expiry)
@@ -132,9 +126,7 @@ def surface_3d(path: Path) -> None:
     expiries = sorted(structure)
     params = [structure[expiry] for expiry in expiries]
 
-    quotes = synthetic_surface(
-        spot, rate, expiries, strikes, params, noise=0.001, seed=1
-    )
+    quotes = synthetic_surface(spot, rate, expiries, strikes, params, noise=0.001, seed=1)
     fits = calibrate_surface(spot, rate, expiries, strikes, quotes)
 
     log_expiries = np.log(np.array(expiries))
@@ -163,13 +155,11 @@ def surface_3d(path: Path) -> None:
     point_strike: list[float] = []
     point_expiry: list[float] = []
     point_vol: list[float] = []
-    for expiry, series in zip(expiries, quotes):
-        for strike, quoted in zip(strikes, series):
+    for expiry, series in zip(expiries, quotes, strict=True):
+        for strike, quoted in zip(strikes, series, strict=True):
             point_strike.append(strike)
             point_expiry.append(expiry)
-            point_vol.append(
-                implied_volatility(quoted, spot, strike, rate, expiry, "call")
-            )
+            point_vol.append(implied_volatility(quoted, spot, strike, rate, expiry, "call"))
 
     fig = plt.figure(figsize=(8.6, 5.6), dpi=140)
     ax = fig.add_subplot(111, projection="3d")
@@ -210,9 +200,7 @@ def early_exercise(path: Path) -> None:
     european: list[float] = []
 
     for spot in spots:
-        result = binomial(
-            "put", float(spot), strike, 0.05, 0.20, 1.0, steps=400
-        )
+        result = binomial("put", float(spot), strike, 0.05, 0.20, 1.0, steps=400)
         american.append(result.american)
         european.append(result.european)
 
@@ -246,9 +234,17 @@ def barrier_curve(path: Path) -> None:
     barriers = np.linspace(105.0, 200.0, 30)
     prices = [
         barrier_price(
-            "call", 100.0, 100.0, 0.05, 0.20, 1.0,
-            barrier=float(level), kind="up-and-out",
-            steps=100, paths=20_000, seed=5,
+            "call",
+            100.0,
+            100.0,
+            0.05,
+            0.20,
+            1.0,
+            barrier=float(level),
+            kind="up-and-out",
+            steps=100,
+            paths=20_000,
+            seed=5,
         ).price
         for level in barriers
     ]
@@ -257,7 +253,10 @@ def barrier_curve(path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7.6, 4.2), dpi=140)
     ax.plot(barriers, prices, color=BLUE, linewidth=1.4, label="up-and-out call")
     ax.axhline(
-        european, color=RED, linewidth=1.2, linestyle="--",
+        european,
+        color=RED,
+        linewidth=1.2,
+        linestyle="--",
         label=f"European call {european:.4f}",
     )
     ax.set_xlabel("barrier level")

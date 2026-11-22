@@ -23,6 +23,10 @@ README comes from a command you can run.
 
 ![Barrier curve](docs/barrier_curve.png)
 
+![ETH volatility smile](docs/real_smile_eth.png)
+
+![BTC implied volatility slices](docs/real_surface.png)
+
 ## Results
 
 Reference case: spot 100, strike 100, rate 5%, volatility 20%, expiry 1 year.
@@ -112,6 +116,17 @@ That is visible in the last figure and it is reported, not hidden.
 The snapshot is downloaded by `scripts/fetch_binance.py` and versioned so the
 repository works without network access. `scripts/real_smile.py` rebuilds the
 figure from the CSV.
+
+The same pipeline runs on ETH, with 200 quotes and RMSE between 0.45 and 1.37
+vol points. The two extra figures show the ETH smile and the three BTC slices in
+three dimensions.
+
+Calibration time on one real slice, ten repetitions:
+
+| Constraint | Median | Minimum | Maximum |
+| --- | --- | --- | --- |
+| Soft penalty | 14.80 ms | 14.72 ms | 14.92 ms |
+| Hard SLSQP | 16.44 ms | 16.33 ms | 16.80 ms |
 
 ## Path-dependent options
 
@@ -233,8 +248,9 @@ american = binomial("put", 100, 100, 0.05, 0.20, 1.0, steps=1_000)
 
 structure = example_term_structure()
 expiries = list(structure)
-quotes = synthetic_surface(100, 0.03, expiries, [90, 95, 100, 105, 110],
-                           [structure[t] for t in expiries])
+quotes = synthetic_surface(
+    100, 0.03, expiries, [90, 95, 100, 105, 110], [structure[t] for t in expiries]
+)
 rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 ```
 
@@ -253,7 +269,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-60 tests cover:
+81 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -281,9 +297,24 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 - Asian and barrier prices: a one-step Asian matching the European price, an
   Asian below the European, a far barrier matching the European, knock-in plus
   knock-out adding up to the European, and reproducibility from a seed.
+- Property tests with Hypothesis: put-call parity, monotonicity in spot and
+  strike, and Greek bounds over random valid inputs.
 
 CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12
 and 3.13.
+
+## Development
+
+```
+pip install -e ".[dev]"
+ruff check .
+ruff format --check .
+mypy src/options_pricer
+pytest --cov=options_pricer --cov-report=term-missing
+```
+
+Line coverage is 98 %. CI runs lint, format, types, tests and coverage on Ubuntu
+and Windows with Python 3.12 and 3.13.
 
 ## Limitations
 
@@ -362,13 +393,19 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 60 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 81 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del
 snapshot real, los diagnósticos de mariposa y calendario, y las relaciones entre
 asiáticas, barreras y europeas. Vanna, volga y charm se comprueban contra
-diferencias finitas centrales de delta y vega.
+diferencias finitas centrales de delta y vega. La cobertura de línea es del 98 %,
+y el CI ejecuta ruff, mypy, los tests y la cobertura en Ubuntu y Windows.
+
+El mismo proceso se aplica a ETH, con 200 cotizaciones y un RMSE de entre 0,45 y
+1,37 puntos de volatilidad. El benchmark de calibración de una slice real da
+14,80 ms de mediana con la penalización suave y 16,44 ms con la restricción dura
+de SLSQP.
 
 ## License
 

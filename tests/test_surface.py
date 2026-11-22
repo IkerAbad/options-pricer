@@ -10,6 +10,7 @@ from options_pricer.surface import (
     butterfly_share_below_zero,
     calendar_gap,
     calibrate,
+    calibrate_from_vols,
     calibrate_surface,
     example_term_structure,
     svi_implied_vol,
@@ -89,7 +90,7 @@ def test_example_term_structure_slopes_down() -> None:
     expiries = sorted(structure)
     at_the_money = [svi_implied_vol(0.0, expiry, structure[expiry]) for expiry in expiries]
 
-    for shorter, longer in zip(at_the_money, at_the_money[1:]):
+    for shorter, longer in zip(at_the_money, at_the_money[1:], strict=False):
         assert longer < shorter - 1e-6
 
 
@@ -131,3 +132,42 @@ def test_calendar_gap_flags_a_decreasing_surface() -> None:
     long = SviParams(a=0.02, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
     assert calendar_gap(short, long, -0.5, 0.5) < 0.0
 
+
+def test_calibrate_rejects_mismatched_arrays() -> None:
+    with pytest.raises(ValueError):
+        calibrate(SPOT, RATE, EXPIRY, STRIKES, [1.0] * 5)
+    with pytest.raises(ValueError):
+        calibrate(SPOT, RATE, EXPIRY, STRIKES[:4], [1.0] * 4)
+    with pytest.raises(ValueError):
+        calibrate_from_vols(EXPIRY, [0.0] * 5, [0.2] * 4)
+
+
+def test_calibrate_rejects_prices_without_a_valid_implied_vol() -> None:
+    with pytest.raises(ValueError):
+        calibrate(SPOT, RATE, EXPIRY, STRIKES, [0.0] * len(STRIKES))
+
+
+def test_calibrate_surface_rejects_empty_input() -> None:
+    with pytest.raises(ValueError):
+        calibrate_surface(SPOT, RATE, [], STRIKES, [])
+
+
+def test_synthetic_surface_rejects_mismatched_expiries() -> None:
+    with pytest.raises(ValueError):
+        synthetic_surface(SPOT, RATE, [0.25, 0.5], STRIKES, [PARAMS])
+
+
+def test_hard_calendar_constraint_is_respected() -> None:
+    short = SviParams(a=0.02, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
+    long = SviParams(a=0.03, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
+
+    fitted, _ = calibrate_from_vols(
+        EXPIRY,
+        [-0.2, -0.1, 0.0, 0.1, 0.2],
+        [svi_implied_vol(k, EXPIRY, long) for k in (-0.2, -0.1, 0.0, 0.1, 0.2)],
+        initial=short,
+        floor=short,
+        hard_calendar=True,
+    )
+
+    assert calendar_gap(short, fitted, -0.5, 0.5) >= -1e-9

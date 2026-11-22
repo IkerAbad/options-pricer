@@ -1,5 +1,7 @@
 """European option pricing with Black-Scholes, Monte Carlo and SVI calibration."""
 
+__version__ = "0.1.0"
+
 from .american import BinomialResult, binomial
 from .black_scholes import Greeks, OptionType, greeks, price
 from .implied_vol import implied_volatility

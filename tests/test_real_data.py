@@ -5,14 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from options_pricer.real_data import Quote, build_slice, load_chain
+from options_pricer.real_data import Quote, build_slice, forward_from_parity, load_chain
 from options_pricer.surface import calibrate_from_vols
 
-SNAPSHOT = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "binance_btc_options_2026-11-22.csv"
-)
+SNAPSHOT = Path(__file__).resolve().parent.parent / "data" / "binance_btc_options_2026-11-22.csv"
 
 
 @pytest.fixture(scope="module")
@@ -51,3 +47,23 @@ def test_every_slice_calibrates_below_three_vol_points(quotes: list[Quote]) -> N
 def test_forward_is_above_the_index_for_this_snapshot(quotes: list[Quote]) -> None:
     current = build_slice([quote for quote in quotes if quote.expiry == "2026-12-25"])
     assert current.forward == pytest.approx(60_875.0, rel=1e-3)
+
+
+def test_forward_falls_back_to_the_index_without_a_pair() -> None:
+    quotes = [
+        Quote("2026-12-25", 32.5, 100.0, "C", 5.0, 101.0),
+        Quote("2026-12-25", 32.5, 110.0, "C", 3.0, 101.0),
+    ]
+    assert forward_from_parity(quotes) == 101.0
+
+
+def test_build_slice_filters_zero_prices() -> None:
+    quotes = [
+        Quote("2026-12-25", 32.5, 90.0, "P", 4.0, 100.0),
+        Quote("2026-12-25", 32.5, 100.0, "C", 5.0, 100.0),
+        Quote("2026-12-25", 32.5, 110.0, "C", 1.0, 100.0),
+        Quote("2026-12-25", 32.5, 120.0, "C", 0.0, 100.0),
+    ]
+    current = build_slice(quotes)
+    assert 120.0 not in current.strikes
+    assert len(current.vols) == len(current.strikes)
