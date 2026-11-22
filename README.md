@@ -108,6 +108,34 @@ The snapshot is downloaded by `scripts/fetch_binance.py` and versioned so the
 repository works without network access. `scripts/real_smile.py` rebuilds the
 figure from the CSV.
 
+## No arbitrage
+
+Two conditions are checked on every calibrated slice.
+
+**Butterfly.** Gatheral's function
+
+```
+g(k) = (1 - k w' / (2 w))^2 - (w'^2 / 4) (1 / w + 1 / 4) + w'' / 2
+```
+
+must be non-negative at every log moneyness. A negative value means the implied
+density is negative somewhere, which no arbitrage-free distribution can produce.
+
+**Calendar.** Total variance must not decrease with maturity at a fixed log
+moneyness: `w(k, T2) >= w(k, T1)` for `T2 > T1`.
+
+On the real snapshot the three slices are butterfly-free: zero per cent of the
+grid points violate `g >= 0`. Calendar is tighter. Fitting each expiry
+independently leaves a gap of -0.0156 between the first two expiries, so the
+short slice carries more total variance than the long one somewhere in the
+wings. The long slice is refitted with a soft penalty that pushes its total
+variance above the previous one. The gap falls to -3.3e-07, which is numerical
+noise, and the price is a worse fit: the RMSE of the middle expiry goes from
+0.0021 to 0.0038.
+
+That is a soft constraint, not a theorem. A hard guarantee needs an optimizer
+with explicit non-linear constraints, and it is not implemented.
+
 ## What it does
 
 - Black-Scholes prices and first and second order Greeks for European calls and
@@ -123,6 +151,8 @@ figure from the CSV.
   exercise premium measured directly.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
+- Butterfly and calendar diagnostics, plus a soft calendar penalty between
+  consecutive expiries.
 - Five figures that regenerate from a script.
 
 ## Install
@@ -185,7 +215,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-43 tests cover:
+47 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -208,6 +238,8 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 - Deep in-the-money American puts close to intrinsic value.
 - Loading the versioned real snapshot, calibrating its three slices below three
   vol points and recovering the forward from put-call parity.
+- Butterfly positivity on a regular slice, detection of a pathological one, and
+  calendar gaps with the expected sign in both directions.
 
 CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12
 and 3.13.
@@ -227,6 +259,8 @@ and 3.13.
 - SVI with five parameters is not uniquely identified by a handful of quotes.
   The chain and the ridge term stabilise it, and the fitted parameters are not
   meant to be read as ground truth.
+- The calendar constraint is a soft penalty, not a hard guarantee. The gap is
+  pushed to numerical noise, not proven to be non-negative.
 - The real data is a single snapshot of Binance BTC options. There is no time
   series, no second underlying and no execution costs.
 
@@ -262,12 +296,20 @@ mercado. El RMSE va de 0,21 puntos de volatilidad en el vencimiento a 67 días a
 1,57 puntos en el de 33 días. El vencimiento corto es el difícil: un SVI de cinco
 parámetros no sigue toda la curvatura de una sonrisa de cripto a un mes.
 
-Los 43 tests cubren los precios de referencia, la paridad put-call, las griegas
+El ajuste se comprueba contra dos condiciones de no arbitraje. La de mariposa,
+con la función de Gatheral, no se viola en ningún punto de las tres slices. La de
+calendario sí: calibrando cada vencimiento por separado, la varianza total cae al
+alargar el plazo en 0,0156. Al reajustar la slice larga con una penalización
+suave, la violación baja a 3,3e-07, ruido numérico, a cambio de empeorar el RMSE
+del vencimiento intermedio de 0,0021 a 0,0038. Es una restricción blanda, no una
+garantía formal.
+
+Los 47 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
-estructura temporal, las propiedades del ejercicio anticipado y la calibración
-del snapshot real. Vanna, volga y charm se comprueban contra diferencias finitas
-centrales de delta y vega.
+estructura temporal, las propiedades del ejercicio anticipado, la calibración del
+snapshot real y los diagnósticos de mariposa y calendario. Vanna, volga y charm
+se comprueban contra diferencias finitas centrales de delta y vega.
 
 ## License
 

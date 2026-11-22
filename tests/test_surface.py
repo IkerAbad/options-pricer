@@ -6,6 +6,9 @@ import pytest
 
 from options_pricer.surface import (
     SviParams,
+    butterfly_g,
+    butterfly_share_below_zero,
+    calendar_gap,
     calibrate,
     calibrate_surface,
     example_term_structure,
@@ -104,4 +107,27 @@ def test_surface_is_reproducible() -> None:
 def test_surface_rejects_mismatched_expiries() -> None:
     with pytest.raises(ValueError):
         calibrate_surface(SPOT, RATE, [0.25, 0.5], STRIKES, [[1.0] * len(STRIKES)])
+
+
+def test_butterfly_g_is_positive_for_a_regular_slice() -> None:
+    for k in (-0.6, -0.3, 0.0, 0.3, 0.6):
+        assert butterfly_g(k, PARAMS) > 0.0
+
+
+def test_butterfly_g_flags_a_pathological_slice() -> None:
+    broken = SviParams(a=-0.005, b=1.0, rho=-0.9, m=0.0, sigma=0.01)
+    assert butterfly_g(0.1, broken) < 0.0
+    assert butterfly_share_below_zero(broken, -0.5, 0.5) > 0.0
+
+
+def test_calendar_gap_is_positive_for_an_increasing_surface() -> None:
+    short = SviParams(a=0.02, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
+    long = SviParams(a=0.04, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
+    assert calendar_gap(short, long, -0.5, 0.5) > 0.0
+
+
+def test_calendar_gap_flags_a_decreasing_surface() -> None:
+    short = SviParams(a=0.04, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
+    long = SviParams(a=0.02, b=0.10, rho=-0.30, m=0.0, sigma=0.10)
+    assert calendar_gap(short, long, -0.5, 0.5) < 0.0
 

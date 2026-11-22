@@ -35,6 +35,62 @@ def total_variance(k: float, params: SviParams) -> float:
     return params.a + params.b * (params.rho * d + math.sqrt(d * d + params.sigma * params.sigma))
 
 
+def total_variance_derivatives(k: float, params: SviParams) -> tuple[float, float, float]:
+    """Total variance and its first two derivatives with respect to log-moneyness."""
+    d = k - params.m
+    root = math.sqrt(d * d + params.sigma * params.sigma)
+    w = params.a + params.b * (params.rho * d + root)
+    w1 = params.b * (params.rho + d / root)
+    w2 = params.b * params.sigma * params.sigma / (root * root * root)
+    return w, w1, w2
+
+
+def butterfly_g(k: float, params: SviParams) -> float:
+    """Gatheral's butterfly function. The slice is free of butterfly arbitrage where g >= 0."""
+    w, w1, w2 = total_variance_derivatives(k, params)
+    if w <= 0.0:
+        return -math.inf
+
+    first = (1.0 - k * w1 / (2.0 * w)) ** 2
+    second = (w1 * w1 / 4.0) * (1.0 / w + 0.25)
+    return first - second + 0.5 * w2
+
+
+def butterfly_profile(
+    params: SviParams, k_min: float, k_max: float, points: int = 201
+) -> list[tuple[float, float]]:
+    step = (k_max - k_min) / (points - 1)
+    return [(k_min + i * step, butterfly_g(k_min + i * step, params)) for i in range(points)]
+
+
+def butterfly_share_below_zero(
+    params: SviParams, k_min: float, k_max: float, points: int = 201, tol: float = 1e-8
+) -> float:
+    profile = butterfly_profile(params, k_min, k_max, points)
+    below = sum(1 for _, value in profile if value < -tol)
+    return below / len(profile)
+
+
+def calendar_gap(
+    short: SviParams,
+    long: SviParams,
+    k_min: float,
+    k_max: float,
+    points: int = 201,
+) -> float:
+    """Smallest increase in total variance between two slices.
+
+    Calendar arbitrage exists when total variance decreases with maturity, so a
+    non-negative gap is the condition to check.
+    """
+    step = (k_max - k_min) / (points - 1)
+    smallest = math.inf
+    for i in range(points):
+        k = k_min + i * step
+        smallest = min(smallest, total_variance(k, long) - total_variance(k, short))
+    return smallest
+
+
 def svi_implied_vol(k: float, expiry: float, params: SviParams) -> float:
     w = max(total_variance(k, params), 1e-12)
     return math.sqrt(w / expiry)
@@ -75,6 +131,8 @@ def calibrate(
     option_type: OptionType = "call",
     initial: SviParams | None = None,
     ridge: float = 1e-3,
+    floor: SviParams | None = None,
+    floor_weight: float = 10.0,
 ) -> tuple[SviParams, float]:
     """Fit an SVI slice to quoted prices. Returns the parameters and the RMSE in volatility.
 
@@ -102,7 +160,7 @@ def calibrate(
     if len(ks) < 5:
         raise ValueError("fewer than five quotes have a valid implied volatility")
 
-    return _fit(expiry, ks, widths, initial, ridge)
+    return _fit(expiry, ks, widths, initial, ridge, floor, floor_weight)
 
 
 def _fit(
@@ -111,14 +169,31 @@ def _fit(
     widths: list[float],
     initial: SviParams | None,
     ridge: float,
+    floor: SviParams | None = None,
+    floor_weight: float = 10.0,
 ) -> tuple[SviParams, float]:
+    calendar_grid = np.linspace(-1.0, 1.0, 41)
+    floor_values = (
+        np.array([total_variance(k, floor) for k in calendar_grid])
+        if floor is not None
+        else None
+    )
+
     def residuals(theta: np.ndarray) -> np.ndarray:
         candidate = SviParams(*[float(value) for value in theta])
         market = np.array(
             [total_variance(k, candidate) - w for k, w in zip(ks, widths)], dtype=float
         )
         shrink = ridge * (theta - guess)
-        return np.concatenate([market, shrink])
+        parts = [market, shrink]
+
+        if floor_values is not None:
+            candidate_values = np.array(
+                [total_variance(k, candidate) for k in calendar_grid]
+            )
+            parts.append(floor_weight * np.maximum(0.0, floor_values - candidate_values))
+
+        return np.concatenate(parts)
 
     if initial is None:
         guess = np.array([max(min(widths) * 0.8, 1e-3), 0.10, -0.30, 0.0, 0.10])
@@ -148,15 +223,22 @@ def calibrate_from_vols(
     vols: list[float],
     initial: SviParams | None = None,
     ridge: float = 1e-3,
+    floor: SviParams | None = None,
+    floor_weight: float = 10.0,
 ) -> tuple[SviParams, float]:
-    """Fit an SVI slice directly to implied volatilities, without going through prices."""
+    """Fit an SVI slice directly to implied volatilities, without going through prices.
+
+    When floor is given, total variance is pushed to stay above that slice at
+    every point of the grid, which removes calendar arbitrage against the
+    previous maturity.
+    """
     if len(log_moneyness) != len(vols):
         raise ValueError("log_moneyness and vols must have the same length")
     if len(vols) < 5:
         raise ValueError("SVI has five parameters, at least five quotes are needed")
 
     widths = [vol * vol * expiry for vol in vols]
-    return _fit(expiry, log_moneyness, widths, initial, ridge)
+    return _fit(expiry, log_moneyness, widths, initial, ridge, floor, floor_weight)
 
 
 def calibrate_surface(
@@ -178,7 +260,8 @@ def calibrate_surface(
 
     for expiry, quotes in sorted(zip(expiries, prices_by_expiry)):
         params, rmse = calibrate(
-            spot, rate, expiry, strikes, quotes, option_type, initial=previous, ridge=1e-2
+            spot, rate, expiry, strikes, quotes, option_type,
+            initial=previous, ridge=1e-2, floor=previous,
         )
         previous = params
         rows.append((expiry, params, rmse))
