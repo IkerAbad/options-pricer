@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from options_pricer.american import binomial
 from options_pricer.black_scholes import call_price
 from options_pricer.implied_vol import implied_volatility
 from options_pricer.monte_carlo import price_european
@@ -201,11 +202,51 @@ def surface_3d(path: Path) -> None:
     plt.close(fig)
 
 
+def early_exercise(path: Path) -> None:
+    strike = 100.0
+    spots = np.linspace(60.0, 140.0, 41)
+    american: list[float] = []
+    european: list[float] = []
+
+    for spot in spots:
+        result = binomial(
+            "put", float(spot), strike, 0.05, 0.20, 1.0, steps=400
+        )
+        american.append(result.american)
+        european.append(result.european)
+
+    premium = np.array(american) - np.array(european)
+
+    fig, (left, right) = plt.subplots(1, 2, figsize=(10.0, 4.0), dpi=140)
+
+    left.plot(spots, american, color=BLUE, linewidth=1.4, label="American put")
+    left.plot(spots, european, color=RED, linewidth=1.2, linestyle="--", label="European put")
+    left.set_xlabel("spot")
+    left.set_ylabel("price")
+    left.set_title("Put price, K = 100, r = 5%, vol = 20%, T = 1")
+    left.legend(frameon=False)
+    left.grid(color=GRID, linewidth=0.6)
+
+    right.plot(spots, premium, color=BLUE, linewidth=1.4)
+    right.set_xlabel("spot")
+    right.set_ylabel("early exercise premium")
+    right.set_title("Value of the right to exercise early")
+
+    for axis in (left, right):
+        for spine in ("top", "right"):
+            axis.spines[spine].set_visible(False)
+
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def main() -> None:
     DOCS.mkdir(parents=True, exist_ok=True)
     convergence(DOCS / "monte_carlo_convergence.png")
     smile(DOCS / "volatility_smile.png")
     surface_3d(DOCS / "volatility_surface.png")
+    early_exercise(DOCS / "early_exercise.png")
     print(f"wrote figures to {DOCS}")
 
 

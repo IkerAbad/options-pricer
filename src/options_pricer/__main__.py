@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import math
 
+from .american import binomial
 from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
 from .monte_carlo import price_european
@@ -42,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     iv_parser = sub.add_parser("iv", help="implied volatility from a quoted price")
     _common(iv_parser)
     iv_parser.add_argument("--price", type=float, required=True, dest="quoted")
+
+    american_parser = sub.add_parser("american", help="American price by binomial tree")
+    _common(american_parser)
+    american_parser.add_argument("--steps", type=int, default=1_000)
+    american_parser.add_argument("--dividend", type=float, default=0.0)
 
     surface_parser = sub.add_parser("surface", help="calibrate a synthetic SVI smile")
     surface_parser.add_argument("--spot", type=float, default=100.0)
@@ -87,6 +93,23 @@ def main(argv: list[str] | None = None) -> int:
             args.quoted, args.spot, args.strike, args.rate, args.expiry, args.type
         )
         print(f"implied vol  {vol:.6f}")
+        return 0
+
+    if args.command == "american":
+        result = binomial(
+            args.type,
+            args.spot,
+            args.strike,
+            args.rate,
+            args.vol,
+            args.expiry,
+            steps=args.steps,
+            dividend_yield=args.dividend,
+        )
+        print(f"american  {result.american:.6f}")
+        print(f"european  {result.european:.6f}")
+        print(f"premium   {result.premium:.6f}")
+        print(f"steps     {result.steps}")
         return 0
 
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]

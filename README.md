@@ -3,16 +3,18 @@
 [![ci](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml/badge.svg)](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-333?style=flat-square)](LICENSE)
 
-European option pricing in Python: closed-form Black-Scholes, Monte Carlo with
-antithetic variates, implied volatility by root finding and SVI calibration
-across a term structure. Every number in this README comes from a command you
-can run.
+European and American option pricing in Python: closed-form Black-Scholes,
+Monte Carlo with antithetic variates, implied volatility by root finding, SVI
+calibration across a term structure and a binomial tree for early exercise.
+Every number in this README comes from a command you can run.
 
 ![Monte Carlo convergence](docs/monte_carlo_convergence.png)
 
 ![Volatility smile](docs/volatility_smile.png)
 
 ![Volatility surface](docs/volatility_surface.png)
+
+![Early exercise](docs/early_exercise.png)
 
 ## Results
 
@@ -59,6 +61,21 @@ slice. The quotes come from a synthetic term structure with 0.1 % price noise.
 `a` grows with maturity, which is the shape you expect when short-dated
 volatility is higher than long-dated volatility.
 
+## American options
+
+Prices from a Cox-Ross-Rubinstein tree with 1,000 steps, same reference case:
+
+| Option | American | European | Premium |
+| --- | --- | --- | --- |
+| Put | 6.089595 | 5.571527 | 0.518069 |
+| Call, no dividend | 10.448584 | 10.448584 | 0.000000 |
+| Call, 8% dividend yield | 6.541188 | 6.141112 | 0.400076 |
+
+The put carries a real premium because waiting has a cost: the strike is
+discounted and the downside is protected today. The call without dividends has
+no premium, which is the standard no-arbitrage result. Adding a dividend yield
+changes that, and the tree finds the value of the early exercise right.
+
 ## What it does
 
 - Black-Scholes prices and first-order Greeks for European calls and puts.
@@ -69,7 +86,9 @@ volatility is higher than long-dated volatility.
 - SVI total-variance calibration by bounded least squares with a soft L1 loss.
 - One slice per expiry, chained in time and regularised towards the previous
   slice, plus a 3D surface by interpolation in log time.
-- Three figures that regenerate from a script.
+- American and European prices on the same binomial tree, with the early
+  exercise premium measured directly.
+- Four figures that regenerate from a script.
 
 ## Install
 
@@ -86,6 +105,7 @@ pytest
 python -m options_pricer price --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1
 python -m options_pricer mc --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --paths 1000000
 python -m options_pricer iv --spot 100 --strike 100 --rate 0.05 --expiry 1 --price 10.45
+python -m options_pricer american --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --type put
 python -m options_pricer surface
 python -m options_pricer surface --all
 python scripts/make_figures.py
@@ -94,7 +114,7 @@ python scripts/make_figures.py
 As a library:
 
 ```python
-from options_pricer import call_price, greeks, implied_volatility, price_european
+from options_pricer import binomial, call_price, greeks, implied_volatility, price_european
 from options_pricer.surface import (
     SviParams,
     calibrate,
@@ -106,6 +126,7 @@ from options_pricer.surface import (
 value = call_price(100, 100, 0.05, 0.20, 1.0)
 vol = implied_volatility(value, 100, 100, 0.05, 1.0, "call")
 result = price_european("call", 100, 100, 0.05, 0.20, 1.0, paths=1_000_000)
+american = binomial("put", 100, 100, 0.05, 0.20, 1.0, steps=1_000)
 
 structure = example_term_structure()
 expiries = list(structure)
@@ -121,15 +142,15 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 - Rates are continuously compounded.
 - Vega is the derivative with respect to volatility in units (0.20, not 20).
 - Theta is the derivative with respect to time, per year.
-- No dividends. A continuous dividend yield can be added by shifting the rate,
-  and it is not implemented.
+- No dividends in the closed form. The binomial tree takes a continuous
+  dividend yield.
 - The SVI form is the raw parametrisation,
   `w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))`, with
   `k = ln(K / F)` and `w = vol^2 * T`.
 
 ## Validation
 
-30 tests cover:
+37 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -143,14 +164,22 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
   quoted noise.
 - One stable fit per expiry across a term structure, with a downward slope in
   at-the-money volatility.
-- Reproducibility of the synthetic surface from a seed.
+- American calls without dividends matching European calls.
+- A positive early exercise premium for American puts and for calls with a
+  dividend yield.
+- Binomial European prices converging to Black-Scholes.
+- Deep in-the-money American puts close to intrinsic value.
 
 CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12
 and 3.13.
 
 ## Limitations
 
-- European options only. No early exercise, no American or Bermudan payoffs.
+- The American price comes from a binomial tree, not from the free boundary. The
+  tree costs O(steps^2) and carries a discretisation error of a few cents at
+  1,000 steps. The premium is the difference between two trees, so that error
+  partially cancels.
+- Exotic payoffs: none. No barriers, Asians, lookbacks or Bermudan schedules.
 - Black-Scholes assumes constant volatility and lognormal returns. The smile in
   the second figure exists because that assumption is false.
 - The surface is an interpolation of the five SVI parameters in log time between
@@ -165,25 +194,32 @@ and 3.13.
 
 ## Español
 
-Valoración de opciones europeas en Python: Black-Scholes cerrado, Monte Carlo con
-variates antitéticas, volatilidad implícita por búsqueda de raíz y calibración
-SVI por mínimos cuadrados con cotas, encadenada a lo largo de la estructura
-temporal.
+Valoración de opciones europeas y americanas en Python: Black-Scholes cerrado,
+Monte Carlo con variates antitéticas, volatilidad implícita por búsqueda de raíz,
+calibración SVI encadenada a lo largo de la estructura temporal y árbol binomial
+para el ejercicio anticipado.
 
 Caso de referencia, con spot y strike 100, tipo 5 %, volatilidad 20 % y un año:
-la call vale 10,450584. Con un millón de trayectorias, Monte Carlo da 10,456536
-con un error estándar de 0,014737 y un intervalo al 95 % de 10,427652 a
-10,485419.
+la call europea vale 10,450584. Con un millón de trayectorias, Monte Carlo da
+10,456536 con un error estándar de 0,014737 y un intervalo al 95 % de 10,427652
+a 10,485419.
 
-La calibración se hace por vencimientos encadenados, de corto a largo, con una
-regularización suave hacia la slice anterior. Con cuatro vencimientos entre 0,25
-y 2 años y un 0,1 % de ruido en precio, el RMSE queda por debajo de 0,0015 en
-todas las slices. La superficie de la tercera figura es una interpolación de los
-cinco parámetros en tiempo logarítmico, no un modelo continuo libre de arbitraje.
+En el árbol binomial con 1.000 pasos, la put americana vale 6,089595 frente a
+5,571527 de la europea, con una prima de 0,518069. La call sin dividendos no
+tiene prima, que es el resultado estándar de no arbitraje. Con un rendimiento por
+dividendo del 8 %, la prima de la call sube a 0,400076.
 
-Los 30 tests cubren los precios de referencia, la paridad put-call, las griegas,
+La calibración SVI se hace por vencimientos encadenados, de corto a largo, con
+una regularización suave hacia la slice anterior. Con cuatro vencimientos entre
+0,25 y 2 años y un 0,1 % de ruido en precio, el RMSE queda por debajo de 0,0015
+en todas las slices. La superficie de la tercera figura es una interpolación de
+los cinco parámetros en tiempo logarítmico, no un modelo continuo libre de
+arbitraje.
+
+Los 37 tests cubren los precios de referencia, la paridad put-call, las griegas,
 la convergencia del error como 1/√N, la recuperación de la volatilidad implícita,
-la calibración de una sonrisa y la estabilidad de la estructura temporal.
+la calibración de una sonrisa, la estabilidad de la estructura temporal y las
+propiedades del ejercicio anticipado.
 
 ## License
 
