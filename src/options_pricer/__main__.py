@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+from dataclasses import asdict
 
+from . import black76
 from .american import binomial
 from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
@@ -26,6 +29,11 @@ def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--vol", type=float, default=0.2)
     parser.add_argument("--expiry", type=float, required=True)
     parser.add_argument("--type", choices=["call", "put"], default="call")
+    parser.add_argument("--json", action="store_true", help="machine-readable output")
+
+
+def _emit(payload: object) -> None:
+    print(json.dumps(payload, indent=2))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,6 +51,15 @@ def main(argv: list[str] | None = None) -> int:
     iv_parser = sub.add_parser("iv", help="implied volatility from a quoted price")
     _common(iv_parser)
     iv_parser.add_argument("--price", type=float, required=True, dest="quoted")
+
+    forward_parser = sub.add_parser("forward", help="Black-76 price on a forward")
+    forward_parser.add_argument("--forward", type=float, required=True)
+    forward_parser.add_argument("--strike", type=float, required=True)
+    forward_parser.add_argument("--rate", type=float, default=0.0)
+    forward_parser.add_argument("--vol", type=float, default=0.2)
+    forward_parser.add_argument("--expiry", type=float, required=True)
+    forward_parser.add_argument("--type", choices=["call", "put"], default="call")
+    forward_parser.add_argument("--json", action="store_true", help="machine-readable output")
 
     american_parser = sub.add_parser("american", help="American price by binomial tree")
     _common(american_parser)
@@ -73,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     surface_parser.add_argument("--rate", type=float, default=0.03)
     surface_parser.add_argument("--expiry", type=float, default=1.0)
     surface_parser.add_argument("--noise", type=float, default=0.001)
+    surface_parser.add_argument("--json", action="store_true", help="machine-readable output")
     surface_parser.add_argument(
         "--all", action="store_true", dest="full", help="calibrate four expiries"
     )
@@ -82,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "price":
         value = price(args.type, args.spot, args.strike, args.rate, args.vol, args.expiry)
         g = greeks(args.type, args.spot, args.strike, args.rate, args.vol, args.expiry)
+        if args.json:
+            _emit({"price": value, **asdict(g)})
+            return 0
         print(f"price  {value:.6f}")
         print(f"delta  {g.delta:.6f}")
         print(f"gamma  {g.gamma:.6f}")
@@ -104,6 +125,9 @@ def main(argv: list[str] | None = None) -> int:
             paths=args.paths,
             seed=args.seed,
         )
+        if args.json:
+            _emit(asdict(mc_result))
+            return 0
         print(f"price  {mc_result.price:.6f}")
         print(f"stderr {mc_result.standard_error:.6f}")
         print(f"95% ci [{mc_result.ci_low:.6f}, {mc_result.ci_high:.6f}]")
@@ -114,7 +138,24 @@ def main(argv: list[str] | None = None) -> int:
         vol = implied_volatility(
             args.quoted, args.spot, args.strike, args.rate, args.expiry, args.type
         )
+        if args.json:
+            _emit({"implied_vol": vol})
+            return 0
         print(f"implied vol  {vol:.6f}")
+        return 0
+
+    if args.command == "forward":
+        value = black76.price(
+            args.type, args.forward, args.strike, args.rate, args.vol, args.expiry
+        )
+        fg = black76.greeks(args.type, args.forward, args.strike, args.rate, args.vol, args.expiry)
+        if args.json:
+            _emit({"price": value, **asdict(fg)})
+            return 0
+        print(f"price  {value:.6f}")
+        print(f"delta  {fg.delta:.6f}")
+        print(f"gamma  {fg.gamma:.6f}")
+        print(f"vega   {fg.vega:.6f}")
         return 0
 
     if args.command == "american":
@@ -128,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
             steps=args.steps,
             dividend_yield=args.dividend,
         )
+        if args.json:
+            _emit(asdict(american_result))
+            return 0
         print(f"american  {american_result.american:.6f}")
         print(f"european  {american_result.european:.6f}")
         print(f"premium   {american_result.premium:.6f}")
@@ -146,6 +190,9 @@ def main(argv: list[str] | None = None) -> int:
             paths=args.paths,
             seed=args.seed,
         )
+        if args.json:
+            _emit(asdict(asian_result))
+            return 0
         print(f"price  {asian_result.price:.6f}")
         print(f"stderr {asian_result.standard_error:.6f}")
         print(f"95% ci [{asian_result.ci_low:.6f}, {asian_result.ci_high:.6f}]")
@@ -167,6 +214,9 @@ def main(argv: list[str] | None = None) -> int:
                 paths=args.paths,
                 seed=args.seed,
             )
+            if args.json:
+                _emit({"kind": args.kind, "barrier": args.barrier, **asdict(values)})
+                return 0
             print(f"price  {values.price:.6f}")
             print(f"delta  {values.delta:.6f}")
             print(f"vega   {values.vega:.6f}")
@@ -187,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
             paths=args.paths,
             seed=args.seed,
         )
+        if args.json:
+            _emit({"kind": args.kind, "barrier": args.barrier, **asdict(barrier_result)})
+            return 0
         print(f"price  {barrier_result.price:.6f}")
         print(f"stderr {barrier_result.standard_error:.6f}")
         print(f"95% ci [{barrier_result.ci_low:.6f}, {barrier_result.ci_high:.6f}]")
@@ -204,6 +257,14 @@ def main(argv: list[str] | None = None) -> int:
             args.spot, args.rate, expiries, strikes, params, noise=args.noise
         )
         rows = calibrate_surface(args.spot, args.rate, expiries, strikes, quotes)
+        if args.json:
+            _emit(
+                [
+                    {"expiry": expiry, **fitted.to_dict(), "rmse": rmse}
+                    for expiry, fitted, rmse in rows
+                ]
+            )
+            return 0
         print("expiry        a        b      rho        m    sigma     rmse")
         for expiry, fitted, rmse in rows:
             print(
@@ -214,6 +275,9 @@ def main(argv: list[str] | None = None) -> int:
 
     prices = synthetic_market(args.spot, args.rate, args.expiry, strikes, truth, noise=args.noise)
     fitted, rmse = calibrate(args.spot, args.rate, args.expiry, strikes, prices)
+    if args.json:
+        _emit({**fitted.to_dict(), "rmse": rmse})
+        return 0
     print(f"a      {fitted.a:.6f}")
     print(f"b      {fitted.b:.6f}")
     print(f"rho    {fitted.rho:.6f}")

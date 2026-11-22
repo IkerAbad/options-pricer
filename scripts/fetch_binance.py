@@ -15,12 +15,13 @@ import json
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 BASE = "https://eapi.binance.com/eapi/v1"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 
-def get_json(url: str) -> object:
+def get_json(url: str) -> Any:
     request = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)
@@ -42,7 +43,7 @@ def main() -> None:
     now = datetime.now(UTC)
     captured_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    instruments = []
+    instruments: list[dict[str, Any]] = []
     for item in info["optionSymbols"]:
         if item.get("status") != "TRADING":
             continue
@@ -84,7 +85,7 @@ def main() -> None:
             }
         )
 
-    by_expiry: dict[str, list[dict[str, float]]] = {}
+    by_expiry: dict[str, list[dict[str, Any]]] = {}
     for row in instruments:
         by_expiry.setdefault(row["expiry"], []).append(row)
 
@@ -116,9 +117,9 @@ def main() -> None:
         writer.writerows(selected)
 
     print(f"index {index_price:.2f} USDT at {captured_at}")
-    for expiry, rows in ranked:
+    for expiry_key, rows in ranked:
         sides = {row["side"] for row in rows}
-        print(f"{expiry}: {len(rows)} quotes, sides {sorted(sides)}")
+        print(f"{expiry_key}: {len(rows)} quotes, sides {sorted(sides)}")
     print(f"wrote {len(selected)} rows to {args.out}")
 
 

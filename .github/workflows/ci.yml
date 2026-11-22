@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ["3.12", "3.13"]
+        python: ["3.12", "3.13", "3.14"]
 
     runs-on: ${{ matrix.os }}
 
@@ -31,10 +31,10 @@ jobs:
         run: ruff format --check .
 
       - name: Types
-        run: mypy src/options_pricer
+        run: mypy src/options_pricer scripts
 
       - name: Test
-        run: pytest --cov=options_pricer --cov-report=term-missing
+        run: pytest --cov=options_pricer --cov-branch --cov-report=term-missing
 
       - name: Build the figures
         run: python scripts/make_figures.py

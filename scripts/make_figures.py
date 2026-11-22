@@ -155,11 +155,13 @@ def surface_3d(path: Path) -> None:
     point_strike: list[float] = []
     point_expiry: list[float] = []
     point_vol: list[float] = []
-    for expiry, series in zip(expiries, quotes, strict=True):
-        for strike, quoted in zip(strikes, series, strict=True):
-            point_strike.append(strike)
-            point_expiry.append(expiry)
-            point_vol.append(implied_volatility(quoted, spot, strike, rate, expiry, "call"))
+    for expiry_value, series in zip(expiries, quotes, strict=True):
+        for strike_value, quoted in zip(strikes, series, strict=True):
+            point_strike.append(float(strike_value))
+            point_expiry.append(float(expiry_value))
+            point_vol.append(
+                implied_volatility(quoted, spot, strike_value, rate, expiry_value, "call")
+            )
 
     fig = plt.figure(figsize=(8.6, 5.6), dpi=140)
     ax = fig.add_subplot(111, projection="3d")

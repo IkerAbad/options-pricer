@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: ruff check .
+        language: system
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format --check .
+        language: system
+        pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: mypy src/options_pricer
+        language: system
+        pass_filenames: false

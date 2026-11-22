@@ -74,6 +74,27 @@ def test_iv_command(capsys) -> None:
     assert "implied vol  0.2" in out
 
 
+def test_forward_command(capsys) -> None:
+    code = main(
+        [
+            "forward",
+            "--forward",
+            "105.12710963760242",
+            "--strike",
+            "100",
+            "--rate",
+            "0.05",
+            "--vol",
+            "0.2",
+            "--expiry",
+            "1",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "10.450" in out
+
+
 def test_american_command(capsys) -> None:
     code = main(
         [
@@ -202,3 +223,71 @@ def test_surface_all_command(capsys) -> None:
 def test_missing_subcommand_exits() -> None:
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_price_json(capsys) -> None:
+    import json
+
+    code = main(
+        [
+            "price",
+            "--spot",
+            "100",
+            "--strike",
+            "100",
+            "--rate",
+            "0.05",
+            "--vol",
+            "0.2",
+            "--expiry",
+            "1",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["price"] == pytest.approx(10.450584, abs=1e-6)
+    assert payload["delta"] == pytest.approx(0.636831, abs=1e-6)
+
+
+def test_barrier_json_includes_kind(capsys) -> None:
+    import json
+
+    code = main(
+        [
+            "barrier",
+            "--spot",
+            "100",
+            "--strike",
+            "100",
+            "--rate",
+            "0.05",
+            "--vol",
+            "0.2",
+            "--expiry",
+            "1",
+            "--barrier",
+            "120",
+            "--paths",
+            "5000",
+            "--steps",
+            "20",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["kind"] == "up-and-out"
+    assert payload["barrier"] == 120.0
+    assert "price" in payload
+
+
+def test_surface_json_is_a_list_when_all(capsys) -> None:
+    import json
+
+    code = main(["surface", "--all", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert isinstance(payload, list)
+    assert len(payload) == 4
+    assert "rmse" in payload[0]

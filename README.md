@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml/badge.svg)](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-333?style=flat-square)](LICENSE)
+[![pypi](https://img.shields.io/pypi/v/options-pricer?style=flat-square&color=333)](https://pypi.org/project/options-pricer/)
 
 API reference: **https://ikerabad.github.io/options-pricer/**
 
@@ -75,8 +76,23 @@ slice. The quotes come from a synthetic term structure with 0.1 % price noise.
 `a` grows with maturity, which is the shape you expect when short-dated
 volatility is higher than long-dated volatility.
 
-## American options
+## Options on a forward
 
+Black-76 is the same model with the spot replaced by the forward. With
+`F = 100 * exp(0.05) = 105.1271`, `K = 100`, `r = 5 %`, `vol = 20 %` and one
+year:
+
+| Quantity | Value |
+| --- | --- |
+| Call price | 10.450584 |
+| Delta | 0.605772 |
+| Gamma | 0.016977 |
+| Vega | 37.524035 |
+
+The price matches Black-Scholes when the forward is the theoretical one, which
+is the consistency check in the tests.
+
+## American options
 Prices from a Cox-Ross-Rubinstein tree with 1,000 steps, same reference case:
 
 | Option | American | European | Premium |
@@ -127,6 +143,13 @@ Calibration time on one real slice, ten repetitions:
 | --- | --- | --- | --- |
 | Soft penalty | 14.80 ms | 14.72 ms | 14.92 ms |
 | Hard SLSQP | 16.44 ms | 16.33 ms | 16.80 ms |
+
+Monte Carlo throughput with one million paths, median of five runs:
+
+| Mode | Median | Paths per second |
+| --- | --- | --- |
+| Antithetic | 21.17 ms | 47,235,763 |
+| Plain | 24.04 ms | 41,603,222 |
 
 ## Path-dependent options
 
@@ -189,6 +212,8 @@ with explicit non-linear constraints, and it is not implemented.
 
 - Black-Scholes prices and first and second order Greeks for European calls and
   puts.
+- Black-76 prices, forward Greeks and implied volatility for options on a
+  forward.
 - Monte Carlo under the exact lognormal terminal distribution, not an Euler
   discretisation, with antithetic variates, standard error and a 95 % interval.
 - Implied volatility by Brent root finding, with an explicit rejection of prices
@@ -209,6 +234,12 @@ with explicit non-linear constraints, and it is not implemented.
 ## Install
 
 ```
+pip install options-pricer
+```
+
+From the repository, with the development tools:
+
+```
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
@@ -226,7 +257,10 @@ python -m options_pricer asian --spot 100 --strike 100 --rate 0.05 --vol 0.2 --e
 python -m options_pricer barrier --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --barrier 120 --kind up-and-out
 python -m options_pricer surface
 python -m options_pricer surface --all
+python -m options_pricer price --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --json
 python scripts/make_figures.py
+python scripts/bench_calibration.py
+python scripts/bench_monte_carlo.py
 ```
 
 As a library:
@@ -269,7 +303,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-81 tests cover:
+93 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -313,8 +347,8 @@ mypy src/options_pricer
 pytest --cov=options_pricer --cov-report=term-missing
 ```
 
-Line coverage is 98 %. CI runs lint, format, types, tests and coverage on Ubuntu
-and Windows with Python 3.12 and 3.13.
+Line coverage is 94 % with branch coverage enabled. CI runs lint, format, types,
+tests and coverage on Ubuntu and Windows with Python 3.12, 3.13 and 3.14.
 
 ## Limitations
 
@@ -393,14 +427,15 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 81 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 93 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del
 snapshot real, los diagnósticos de mariposa y calendario, y las relaciones entre
 asiáticas, barreras y europeas. Vanna, volga y charm se comprueban contra
-diferencias finitas centrales de delta y vega. La cobertura de línea es del 98 %,
-y el CI ejecuta ruff, mypy, los tests y la cobertura en Ubuntu y Windows.
+diferencias finitas centrales de delta y vega. La cobertura de línea es del 94 %
+con cobertura de ramas, y el CI ejecuta ruff, mypy, los tests y la cobertura en
+Ubuntu y Windows con Python 3.12, 3.13 y 3.14.
 
 El mismo proceso se aplica a ETH, con 200 cotizaciones y un RMSE de entre 0,45 y
 1,37 puntos de volatilidad. El benchmark de calibración de una slice real da

@@ -29,6 +29,26 @@ class SviParams:
     m: float
     sigma: float
 
+    def to_dict(self) -> dict[str, float]:
+        """Plain dictionary, ready to serialise as JSON."""
+        return {
+            "a": self.a,
+            "b": self.b,
+            "rho": self.rho,
+            "m": self.m,
+            "sigma": self.sigma,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, float]) -> SviParams:
+        return cls(
+            a=float(data["a"]),
+            b=float(data["b"]),
+            rho=float(data["rho"]),
+            m=float(data["m"]),
+            sigma=float(data["sigma"]),
+        )
+
 
 def total_variance(k: float, params: SviParams) -> float:
     d = k - params.m

@@ -69,6 +69,18 @@ def test_mismatched_inputs_are_rejected() -> None:
         calibrate(SPOT, RATE, EXPIRY, STRIKES, [1.0] * 5)
 
 
+def test_svi_params_round_trip_through_a_dictionary() -> None:
+    restored = SviParams.from_dict(PARAMS.to_dict())
+    assert restored == PARAMS
+
+
+def test_svi_params_survive_json() -> None:
+    import json
+
+    restored = SviParams.from_dict(json.loads(json.dumps(PARAMS.to_dict())))
+    assert restored == PARAMS
+
+
 def test_surface_calibration_returns_one_fit_per_expiry() -> None:
     structure = example_term_structure()
     expiries = list(structure)

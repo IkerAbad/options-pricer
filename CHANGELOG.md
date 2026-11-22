@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Black-76 prices, forward Greeks and implied volatility for options on a
+  forward.
+- JSON output in every CLI command.
+- SVI parameters serialise to and from plain dictionaries.
+- Benchmarks for the SVI calibration and the Monte Carlo engine.
+- Branch coverage, mypy on the scripts and Python 3.14 in CI.
+- 93 tests, 94 % branch coverage.
+
 ## 0.1.0
 
 Initial release.
