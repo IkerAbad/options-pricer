@@ -90,7 +90,6 @@ def calibrate(
     forward = spot * math.exp(rate * expiry)
     ks: list[float] = []
     widths: list[float] = []
-    vols: list[float] = []
 
     for strike, quoted in zip(strikes, prices):
         try:
@@ -99,11 +98,20 @@ def calibrate(
             continue
         ks.append(math.log(strike / forward))
         widths.append(vol * vol * expiry)
-        vols.append(vol)
 
     if len(ks) < 5:
         raise ValueError("fewer than five quotes have a valid implied volatility")
 
+    return _fit(expiry, ks, widths, initial, ridge)
+
+
+def _fit(
+    expiry: float,
+    ks: list[float],
+    widths: list[float],
+    initial: SviParams | None,
+    ridge: float,
+) -> tuple[SviParams, float]:
     def residuals(theta: np.ndarray) -> np.ndarray:
         candidate = SviParams(*[float(value) for value in theta])
         market = np.array(
@@ -127,10 +135,28 @@ def calibrate(
     params = SviParams(*[float(value) for value in result.x])
 
     squared_errors = [
-        (svi_implied_vol(k, expiry, params) - vol) ** 2 for k, vol in zip(ks, vols)
+        (svi_implied_vol(k, expiry, params) - math.sqrt(w / expiry)) ** 2
+        for k, w in zip(ks, widths)
     ]
     rmse = math.sqrt(sum(squared_errors) / len(squared_errors))
     return params, rmse
+
+
+def calibrate_from_vols(
+    expiry: float,
+    log_moneyness: list[float],
+    vols: list[float],
+    initial: SviParams | None = None,
+    ridge: float = 1e-3,
+) -> tuple[SviParams, float]:
+    """Fit an SVI slice directly to implied volatilities, without going through prices."""
+    if len(log_moneyness) != len(vols):
+        raise ValueError("log_moneyness and vols must have the same length")
+    if len(vols) < 5:
+        raise ValueError("SVI has five parameters, at least five quotes are needed")
+
+    widths = [vol * vol * expiry for vol in vols]
+    return _fit(expiry, log_moneyness, widths, initial, ridge)
 
 
 def calibrate_surface(

@@ -16,6 +16,8 @@ Every number in this README comes from a command you can run.
 
 ![Early exercise](docs/early_exercise.png)
 
+![Real volatility smile](docs/real_smile.png)
+
 ## Results
 
 Reference case: spot 100, strike 100, rate 5%, volatility 20%, expiry 1 year.
@@ -79,6 +81,33 @@ discounted and the downside is protected today. The call without dividends has
 no premium, which is the standard no-arbitrage result. Adding a dividend yield
 changes that, and the tree finds the value of the early exercise right.
 
+## Real market data
+
+`data/binance_btc_options_2026-11-22.csv` is a snapshot of the Binance BTC
+options chain, captured on 2026-11-22 at 20:22 UTC with the index at 60,637.68
+USDT. It holds 446 quotes across three expiries, calls and puts, filtered to
+positive bid and ask, mid above 1 USDT, a relative spread below 50 % and
+moneyness between 0.5 and 2.
+
+The forward for each expiry comes from put-call parity on the pair closest to
+the index, with a zero rate. SVI is fitted directly to the market implied
+volatilities, which avoids the quote conversion that an inverse contract would
+need.
+
+| Expiry | Days | Forward | Quotes | RMSE |
+| --- | --- | --- | --- | --- |
+| 2026-12-25 | 32.5 | 60,875.00 | 75 | 1.57 vol points |
+| 2027-01-29 | 67.5 | 61,127.50 | 85 | 0.21 vol points |
+| 2027-03-26 | 123.5 | 61,627.50 | 78 | 0.35 vol points |
+
+The short expiry is the hard one. A five-parameter SVI cannot follow the full
+curvature of a 33-day crypto smile, and the fit leaves 1.57 vol points of RMSE.
+That is visible in the last figure and it is reported, not hidden.
+
+The snapshot is downloaded by `scripts/fetch_binance.py` and versioned so the
+repository works without network access. `scripts/real_smile.py` rebuilds the
+figure from the CSV.
+
 ## What it does
 
 - Black-Scholes prices and first and second order Greeks for European calls and
@@ -92,7 +121,9 @@ changes that, and the tree finds the value of the early exercise right.
   slice, plus a 3D surface by interpolation in log time.
 - American and European prices on the same binomial tree, with the early
   exercise premium measured directly.
-- Four figures that regenerate from a script.
+- SVI calibration on a versioned real snapshot of the Binance BTC options
+  chain, not only on synthetic data.
+- Five figures that regenerate from a script.
 
 ## Install
 
@@ -154,7 +185,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-40 tests cover:
+43 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -175,6 +206,8 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
   dividend yield.
 - Binomial European prices converging to Black-Scholes.
 - Deep in-the-money American puts close to intrinsic value.
+- Loading the versioned real snapshot, calibrating its three slices below three
+  vol points and recovering the forward from put-call parity.
 
 CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12
 and 3.13.
@@ -194,8 +227,8 @@ and 3.13.
 - SVI with five parameters is not uniquely identified by a handful of quotes.
   The chain and the ridge term stabilise it, and the fitted parameters are not
   meant to be read as ground truth.
-- The market is synthetic. The repo does not download quotes, so it cannot be
-  validated against a real chain without adding a data source.
+- The real data is a single snapshot of Binance BTC options. There is no time
+  series, no second underlying and no execution costs.
 
 ## Español
 
@@ -221,11 +254,20 @@ en todas las slices. La superficie de la tercera figura es una interpolación de
 los cinco parámetros en tiempo logarítmico, no un modelo continuo libre de
 arbitraje.
 
-Los 40 tests cubren los precios de referencia, la paridad put-call, las griegas
+El repositorio incluye además un snapshot real de opciones de BTC de Binance,
+capturado el 22/11/2026 con el índice en 60.637,68 USDT. Son 446 cotizaciones en
+tres vencimientos. El forward de cada vencimiento sale de la paridad put-call con
+tipo cero, y el SVI se ajusta directamente a las volatilidades implícitas del
+mercado. El RMSE va de 0,21 puntos de volatilidad en el vencimiento a 67 días a
+1,57 puntos en el de 33 días. El vencimiento corto es el difícil: un SVI de cinco
+parámetros no sigue toda la curvatura de una sonrisa de cripto a un mes.
+
+Los 43 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
-estructura temporal y las propiedades del ejercicio anticipado. Vanna, volga y
-charm se comprueban contra diferencias finitas centrales de delta y vega.
+estructura temporal, las propiedades del ejercicio anticipado y la calibración
+del snapshot real. Vanna, volga y charm se comprueban contra diferencias finitas
+centrales de delta y vega.
 
 ## License
 
