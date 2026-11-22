@@ -8,7 +8,14 @@ import math
 from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
 from .monte_carlo import price_european
-from .surface import SviParams, calibrate, synthetic_market
+from .surface import (
+    SviParams,
+    calibrate,
+    calibrate_surface,
+    example_term_structure,
+    synthetic_market,
+    synthetic_surface,
+)
 
 
 def _common(parser: argparse.ArgumentParser) -> None:
@@ -41,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     surface_parser.add_argument("--rate", type=float, default=0.03)
     surface_parser.add_argument("--expiry", type=float, default=1.0)
     surface_parser.add_argument("--noise", type=float, default=0.001)
+    surface_parser.add_argument(
+        "--all", action="store_true", dest="full", help="calibrate four expiries"
+    )
 
     args = parser.parse_args(argv)
 
@@ -81,6 +91,23 @@ def main(argv: list[str] | None = None) -> int:
 
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
     truth = SviParams(a=0.02, b=0.15, rho=-0.4, m=-0.05, sigma=0.15)
+
+    if args.full:
+        structure = example_term_structure()
+        expiries = list(structure)
+        params = [structure[expiry] for expiry in expiries]
+        quotes = synthetic_surface(
+            args.spot, args.rate, expiries, strikes, params, noise=args.noise
+        )
+        rows = calibrate_surface(args.spot, args.rate, expiries, strikes, quotes)
+        print("expiry        a        b      rho        m    sigma     rmse")
+        for expiry, fitted, rmse in rows:
+            print(
+                f"{expiry:6.2f}  {fitted.a:7.4f}  {fitted.b:6.4f}  "
+                f"{fitted.rho:6.3f}  {fitted.m:6.3f}  {fitted.sigma:6.3f}  {rmse:.6f}"
+            )
+        return 0
+
     prices = synthetic_market(
         args.spot, args.rate, args.expiry, strikes, truth, noise=args.noise
     )

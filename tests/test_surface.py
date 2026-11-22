@@ -7,8 +7,11 @@ import pytest
 from options_pricer.surface import (
     SviParams,
     calibrate,
+    calibrate_surface,
+    example_term_structure,
     svi_implied_vol,
     synthetic_market,
+    synthetic_surface,
     total_variance,
 )
 
@@ -60,3 +63,45 @@ def test_five_quotes_are_required() -> None:
 def test_mismatched_inputs_are_rejected() -> None:
     with pytest.raises(ValueError):
         calibrate(SPOT, RATE, EXPIRY, STRIKES, [1.0] * 5)
+
+
+def test_surface_calibration_returns_one_fit_per_expiry() -> None:
+    structure = example_term_structure()
+    expiries = list(structure)
+    params = [structure[expiry] for expiry in expiries]
+    quotes = synthetic_surface(SPOT, RATE, expiries, STRIKES, params, noise=0.001)
+
+    rows = calibrate_surface(SPOT, RATE, expiries, STRIKES, quotes)
+
+    assert len(rows) == len(expiries)
+    assert [row[0] for row in rows] == expiries
+    for _, fitted, rmse in rows:
+        assert rmse < 0.01
+        assert fitted.b > 0.0
+        assert -1.0 < fitted.rho < 1.0
+
+
+def test_example_term_structure_slopes_down() -> None:
+    structure = example_term_structure()
+    expiries = sorted(structure)
+    at_the_money = [svi_implied_vol(0.0, expiry, structure[expiry]) for expiry in expiries]
+
+    for shorter, longer in zip(at_the_money, at_the_money[1:]):
+        assert longer < shorter - 1e-6
+
+
+def test_surface_is_reproducible() -> None:
+    structure = example_term_structure()
+    expiries = list(structure)
+    params = [structure[expiry] for expiry in expiries]
+
+    first = synthetic_surface(SPOT, RATE, expiries, STRIKES, params, noise=0.001, seed=9)
+    second = synthetic_surface(SPOT, RATE, expiries, STRIKES, params, noise=0.001, seed=9)
+
+    assert first == second
+
+
+def test_surface_rejects_mismatched_expiries() -> None:
+    with pytest.raises(ValueError):
+        calibrate_surface(SPOT, RATE, [0.25, 0.5], STRIKES, [[1.0] * len(STRIKES)])
+

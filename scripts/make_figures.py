@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from options_pricer.black_scholes import call_price
 from options_pricer.implied_vol import implied_volatility
@@ -17,8 +18,11 @@ from options_pricer.monte_carlo import price_european
 from options_pricer.surface import (
     SviParams,
     calibrate,
+    calibrate_surface,
+    example_term_structure,
     svi_implied_vol,
     synthetic_market,
+    synthetic_surface,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -118,10 +122,90 @@ def smile(path: Path) -> None:
     plt.close(fig)
 
 
+def surface_3d(path: Path) -> None:
+    spot = 100.0
+    rate = 0.03
+    strikes = [75.0 + 5.0 * i for i in range(11)]
+    structure = example_term_structure()
+    expiries = sorted(structure)
+    params = [structure[expiry] for expiry in expiries]
+
+    quotes = synthetic_surface(
+        spot, rate, expiries, strikes, params, noise=0.001, seed=1
+    )
+    fits = calibrate_surface(spot, rate, expiries, strikes, quotes)
+
+    log_expiries = np.log(np.array(expiries))
+    names = ("a", "b", "rho", "m", "sigma")
+    fitted_values = {
+        name: np.array([getattr(fitted, name) for _, fitted, _ in fits]) for name in names
+    }
+
+    expiry_grid = np.linspace(min(expiries), max(expiries), 40)
+    strike_grid = np.linspace(min(strikes), max(strikes), 41)
+    strike_mesh, expiry_mesh = np.meshgrid(strike_grid, expiry_grid)
+    vol_mesh = np.zeros_like(strike_mesh)
+
+    for i, expiry in enumerate(expiry_grid):
+        interpolated = {
+            name: float(np.interp(np.log(expiry), log_expiries, fitted_values[name]))
+            for name in names
+        }
+        candidate = SviParams(**interpolated)
+        forward = spot * math.exp(rate * expiry)
+        for j, strike in enumerate(strike_grid):
+            vol_mesh[i, j] = svi_implied_vol(
+                math.log(float(strike) / forward), float(expiry), candidate
+            )
+
+    point_strike: list[float] = []
+    point_expiry: list[float] = []
+    point_vol: list[float] = []
+    for expiry, series in zip(expiries, quotes):
+        for strike, quoted in zip(strikes, series):
+            point_strike.append(strike)
+            point_expiry.append(expiry)
+            point_vol.append(
+                implied_volatility(quoted, spot, strike, rate, expiry, "call")
+            )
+
+    fig = plt.figure(figsize=(8.6, 5.6), dpi=140)
+    ax = fig.add_subplot(111, projection="3d")
+    surface = ax.plot_surface(
+        strike_mesh,
+        expiry_mesh,
+        vol_mesh,
+        cmap="viridis",
+        alpha=0.78,
+        linewidth=0,
+        antialiased=True,
+    )
+    ax.scatter(
+        point_strike,
+        point_expiry,
+        point_vol,
+        color=RED,
+        s=12,
+        depthshade=False,
+        label="quoted implied volatility",
+    )
+    ax.set_xlabel("strike")
+    ax.set_ylabel("expiry (years)")
+    ax.set_zlabel("implied volatility")
+    ax.set_title("Implied volatility surface, SVI slices interpolated in log time")
+    ax.view_init(elev=24, azim=-130)
+    ax.legend(frameon=False, loc="upper left")
+    fig.colorbar(surface, shrink=0.6, pad=0.1, label="implied volatility")
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def main() -> None:
     DOCS.mkdir(parents=True, exist_ok=True)
     convergence(DOCS / "monte_carlo_convergence.png")
     smile(DOCS / "volatility_smile.png")
+    surface_3d(DOCS / "volatility_surface.png")
     print(f"wrote figures to {DOCS}")
 
 
