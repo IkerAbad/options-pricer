@@ -1,14 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Black-76 prices, forward Greeks and implied volatility for options on a
   forward.
+- Continuous dividend yield in Black-Scholes prices and Greeks.
 - JSON output in every CLI command.
 - SVI parameters serialise to and from plain dictionaries.
-- Benchmarks for the SVI calibration and the Monte Carlo engine.
-- Branch coverage, mypy on the scripts and Python 3.14 in CI.
-- 93 tests, 94 % branch coverage.
+- Benchmarks for the SVI calibration, the Monte Carlo engine and Black-Scholes.
+- Black-Scholes moved from `scipy.stats.norm` to `math.erfc`, a hundred times
+  faster with identical prices.
+- Cross-checks against QuantLib for European and American prices.- Branch coverage, mypy on the scripts and Python 3.14 in CI.
+- 101 tests, 94 % branch coverage.
 
 ## 0.1.0
 

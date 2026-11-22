@@ -2,14 +2,14 @@
 
 Conventions:
 - spot, strike and prices are in currency units.
-- rate, volatility and expiry are annualised. expiry is in years.
+- rate, volatility, dividend yield and expiry are annualised. expiry is in years.
 - vega is the derivative with respect to volatility in units (0.20, not 20).
 - theta is the derivative with respect to calendar time, per year.
 - rho is the derivative with respect to the continuously compounded rate.
 - vanna is the cross derivative with respect to spot and volatility.
 - volga is the second derivative with respect to volatility.
 - charm is minus the derivative of delta with respect to time to expiry, so it
-  measures how delta changes as calendar time passes. Calls and puts share it.
+  measures how delta changes as calendar time passes.
 """
 
 from __future__ import annotations
@@ -18,9 +18,19 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
-from scipy.stats import norm
-
 OptionType = Literal["call", "put"]
+
+_SQRT_2 = math.sqrt(2.0)
+_SQRT_2PI = math.sqrt(2.0 * math.pi)
+
+
+def _norm_cdf(x: float) -> float:
+    """Standard normal CDF through erfc, which is faster and more accurate in the tails."""
+    return 0.5 * math.erfc(-x / _SQRT_2)
+
+
+def _norm_pdf(x: float) -> float:
+    return math.exp(-0.5 * x * x) / _SQRT_2PI
 
 
 @dataclass(frozen=True)
@@ -47,10 +57,16 @@ def _validate(spot: float, strike: float, vol: float, expiry: float) -> None:
 
 
 def _d1_d2(
-    spot: float, strike: float, rate: float, vol: float, expiry: float
+    spot: float,
+    strike: float,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float,
 ) -> tuple[float, float]:
     sqrt_t = math.sqrt(expiry)
-    d1 = (math.log(spot / strike) + (rate + 0.5 * vol * vol) * expiry) / (vol * sqrt_t)
+    carry = rate - dividend_yield
+    d1 = (math.log(spot / strike) + (carry + 0.5 * vol * vol) * expiry) / (vol * sqrt_t)
     return d1, d1 - vol * sqrt_t
 
 
@@ -61,25 +77,41 @@ def price(
     rate: float,
     vol: float,
     expiry: float,
+    dividend_yield: float = 0.0,
 ) -> float:
-    """Black-Scholes price of a European call or put."""
+    """Black-Scholes price of a European call or put, with a continuous dividend yield."""
     _validate(spot, strike, vol, expiry)
-    d1, d2 = _d1_d2(spot, strike, rate, vol, expiry)
-    discount = math.exp(-rate * expiry)
+    d1, d2 = _d1_d2(spot, strike, rate, vol, expiry, dividend_yield)
+    discount_r = math.exp(-rate * expiry)
+    discount_q = math.exp(-dividend_yield * expiry)
 
     if option_type == "call":
-        return spot * norm.cdf(d1) - strike * discount * norm.cdf(d2)
+        return spot * discount_q * _norm_cdf(d1) - strike * discount_r * _norm_cdf(d2)
     if option_type == "put":
-        return strike * discount * norm.cdf(-d2) - spot * norm.cdf(-d1)
+        return strike * discount_r * _norm_cdf(-d2) - spot * discount_q * _norm_cdf(-d1)
     raise ValueError("option_type must be 'call' or 'put'")
 
 
-def call_price(spot: float, strike: float, rate: float, vol: float, expiry: float) -> float:
-    return price("call", spot, strike, rate, vol, expiry)
+def call_price(
+    spot: float,
+    strike: float,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float = 0.0,
+) -> float:
+    return price("call", spot, strike, rate, vol, expiry, dividend_yield)
 
 
-def put_price(spot: float, strike: float, rate: float, vol: float, expiry: float) -> float:
-    return price("put", spot, strike, rate, vol, expiry)
+def put_price(
+    spot: float,
+    strike: float,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float = 0.0,
+) -> float:
+    return price("put", spot, strike, rate, vol, expiry, dividend_yield)
 
 
 def greeks(
@@ -89,34 +121,48 @@ def greeks(
     rate: float,
     vol: float,
     expiry: float,
+    dividend_yield: float = 0.0,
 ) -> Greeks:
-    """First-order Greeks, with the conventions listed in the module docstring."""
+    """First and second order Greeks, with the conventions listed in the module docstring."""
     _validate(spot, strike, vol, expiry)
-    d1, d2 = _d1_d2(spot, strike, rate, vol, expiry)
+    d1, d2 = _d1_d2(spot, strike, rate, vol, expiry, dividend_yield)
 
     sqrt_t = math.sqrt(expiry)
-    discount = math.exp(-rate * expiry)
-    pdf_d1 = norm.pdf(d1)
+    discount_r = math.exp(-rate * expiry)
+    discount_q = math.exp(-dividend_yield * expiry)
+    pdf_d1 = _norm_pdf(d1)
+    carry = rate - dividend_yield
 
-    gamma = pdf_d1 / (spot * vol * sqrt_t)
-    vega = spot * pdf_d1 * sqrt_t
-    vanna = -pdf_d1 * d2 / vol
+    gamma = discount_q * pdf_d1 / (spot * vol * sqrt_t)
+    vega = spot * discount_q * pdf_d1 * sqrt_t
+    vanna = -discount_q * pdf_d1 * d2 / vol
     volga = vega * d1 * d2 / vol
-    charm = (
-        pdf_d1
-        * (math.log(spot / strike) - (rate + 0.5 * vol * vol) * expiry)
+    charm_common = (
+        discount_q
+        * pdf_d1
+        * (math.log(spot / strike) - (carry + 0.5 * vol * vol) * expiry)
         / (2.0 * vol * expiry * sqrt_t)
     )
-    theta_common = -spot * pdf_d1 * vol / (2.0 * sqrt_t)
+    theta_common = -spot * discount_q * pdf_d1 * vol / (2.0 * sqrt_t)
 
     if option_type == "call":
-        delta = norm.cdf(d1)
-        theta = theta_common - rate * strike * discount * norm.cdf(d2)
-        rho = strike * expiry * discount * norm.cdf(d2)
+        delta = discount_q * _norm_cdf(d1)
+        theta = (
+            theta_common
+            + dividend_yield * spot * discount_q * _norm_cdf(d1)
+            - rate * strike * discount_r * _norm_cdf(d2)
+        )
+        rho = strike * expiry * discount_r * _norm_cdf(d2)
+        charm = charm_common + dividend_yield * discount_q * _norm_cdf(d1)
     elif option_type == "put":
-        delta = norm.cdf(d1) - 1.0
-        theta = theta_common + rate * strike * discount * norm.cdf(-d2)
-        rho = -strike * expiry * discount * norm.cdf(-d2)
+        delta = -discount_q * _norm_cdf(-d1)
+        theta = (
+            theta_common
+            - dividend_yield * spot * discount_q * _norm_cdf(-d1)
+            + rate * strike * discount_r * _norm_cdf(-d2)
+        )
+        rho = -strike * expiry * discount_r * _norm_cdf(-d2)
+        charm = charm_common - dividend_yield * discount_q * _norm_cdf(-d1)
     else:
         raise ValueError("option_type must be 'call' or 'put'")
 

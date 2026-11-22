@@ -4,6 +4,7 @@ import math
 
 import pytest
 
+from options_pricer import black76
 from options_pricer.black_scholes import call_price, greeks, price, put_price
 
 SPOT = 100.0
@@ -95,3 +96,45 @@ def test_second_order_greek_signs_at_the_money() -> None:
     assert result.vanna < 0.0
     assert result.volga > 0.0
     assert result.charm < 0.0
+
+
+def test_dividend_yield_lowers_the_call_and_raises_the_put() -> None:
+    assert call_price(SPOT, STRIKE, RATE, VOL, EXPIRY, 0.03) < call_price(
+        SPOT, STRIKE, RATE, VOL, EXPIRY
+    )
+    assert put_price(SPOT, STRIKE, RATE, VOL, EXPIRY, 0.03) > put_price(
+        SPOT, STRIKE, RATE, VOL, EXPIRY
+    )
+
+
+def test_put_call_parity_with_dividends() -> None:
+    call = call_price(SPOT, STRIKE, RATE, VOL, EXPIRY, 0.03)
+    put = put_price(SPOT, STRIKE, RATE, VOL, EXPIRY, 0.03)
+    expected = SPOT * math.exp(-0.03 * EXPIRY) - STRIKE * math.exp(-RATE * EXPIRY)
+    assert call - put == pytest.approx(expected, abs=1e-10)
+
+
+def test_dividend_yield_matches_black76() -> None:
+    dividend = 0.03
+    forward = SPOT * math.exp((RATE - dividend) * EXPIRY)
+    assert call_price(SPOT, STRIKE, RATE, VOL, EXPIRY, dividend) == pytest.approx(
+        black76.price("call", forward, STRIKE, RATE, VOL, EXPIRY), abs=1e-10
+    )
+
+
+def test_greeks_with_dividends_match_finite_differences() -> None:
+    dividend = 0.03
+    step = 1e-4
+    base = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY, dividend)
+
+    spot_up = price("call", SPOT * (1 + step), STRIKE, RATE, VOL, EXPIRY, dividend)
+    spot_down = price("call", SPOT * (1 - step), STRIKE, RATE, VOL, EXPIRY, dividend)
+    assert base.delta == pytest.approx((spot_up - spot_down) / (2.0 * SPOT * step), rel=1e-6)
+
+    vol_up = price("call", SPOT, STRIKE, RATE, VOL + step, EXPIRY, dividend)
+    vol_down = price("call", SPOT, STRIKE, RATE, VOL - step, EXPIRY, dividend)
+    assert base.vega == pytest.approx((vol_up - vol_down) / (2.0 * step), rel=1e-5)
+
+    charm_up = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY + step, dividend).delta
+    charm_down = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY - step, dividend).delta
+    assert base.charm == pytest.approx(-(charm_up - charm_down) / (2.0 * step), rel=1e-3)

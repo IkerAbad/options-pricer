@@ -11,9 +11,8 @@ import math
 from dataclasses import dataclass
 
 from scipy.optimize import brentq
-from scipy.stats import norm
 
-from .black_scholes import OptionType
+from .black_scholes import OptionType, _norm_cdf, _norm_pdf
 
 
 @dataclass(frozen=True)
@@ -49,9 +48,9 @@ def price(
     discount = math.exp(-rate * expiry)
 
     if option_type == "call":
-        return discount * (forward * norm.cdf(d1) - strike * norm.cdf(d2))
+        return discount * (forward * _norm_cdf(d1) - strike * _norm_cdf(d2))
     if option_type == "put":
-        return discount * (strike * norm.cdf(-d2) - forward * norm.cdf(-d1))
+        return discount * (strike * _norm_cdf(-d2) - forward * _norm_cdf(-d1))
     raise ValueError("option_type must be 'call' or 'put'")
 
 
@@ -67,12 +66,12 @@ def greeks(
     d1, _ = _d1_d2(forward, strike, vol, expiry)
     discount = math.exp(-rate * expiry)
     sqrt_t = math.sqrt(expiry)
-    pdf_d1 = norm.pdf(d1)
+    pdf_d1 = _norm_pdf(d1)
 
     if option_type == "call":
-        delta = discount * norm.cdf(d1)
+        delta = discount * _norm_cdf(d1)
     elif option_type == "put":
-        delta = -discount * norm.cdf(-d1)
+        delta = -discount * _norm_cdf(-d1)
     else:
         raise ValueError("option_type must be 'call' or 'put'")
 
