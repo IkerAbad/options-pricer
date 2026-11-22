@@ -16,6 +16,7 @@ from options_pricer.american import binomial
 from options_pricer.black_scholes import call_price
 from options_pricer.implied_vol import implied_volatility
 from options_pricer.monte_carlo import price_european
+from options_pricer.path_dependent import barrier_price
 from options_pricer.surface import (
     SviParams,
     calibrate,
@@ -241,12 +242,43 @@ def early_exercise(path: Path) -> None:
     plt.close(fig)
 
 
+def barrier_curve(path: Path) -> None:
+    barriers = np.linspace(105.0, 200.0, 30)
+    prices = [
+        barrier_price(
+            "call", 100.0, 100.0, 0.05, 0.20, 1.0,
+            barrier=float(level), kind="up-and-out",
+            steps=100, paths=20_000, seed=5,
+        ).price
+        for level in barriers
+    ]
+    european = call_price(100.0, 100.0, 0.05, 0.20, 1.0)
+
+    fig, ax = plt.subplots(figsize=(7.6, 4.2), dpi=140)
+    ax.plot(barriers, prices, color=BLUE, linewidth=1.4, label="up-and-out call")
+    ax.axhline(
+        european, color=RED, linewidth=1.2, linestyle="--",
+        label=f"European call {european:.4f}",
+    )
+    ax.set_xlabel("barrier level")
+    ax.set_ylabel("price")
+    ax.set_title("Up-and-out call, S = K = 100, r = 5%, vol = 20%, T = 1")
+    ax.grid(color=GRID, linewidth=0.6)
+    ax.legend(frameon=False)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def main() -> None:
     DOCS.mkdir(parents=True, exist_ok=True)
     convergence(DOCS / "monte_carlo_convergence.png")
     smile(DOCS / "volatility_smile.png")
     surface_3d(DOCS / "volatility_surface.png")
     early_exercise(DOCS / "early_exercise.png")
+    barrier_curve(DOCS / "barrier_curve.png")
     print(f"wrote figures to {DOCS}")
 
 

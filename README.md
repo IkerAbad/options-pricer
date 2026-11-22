@@ -3,10 +3,11 @@
 [![ci](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml/badge.svg)](https://github.com/IkerAbad/options-pricer/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-333?style=flat-square)](LICENSE)
 
-European and American option pricing in Python: closed-form Black-Scholes,
-Monte Carlo with antithetic variates, implied volatility by root finding, SVI
-calibration across a term structure and a binomial tree for early exercise.
-Every number in this README comes from a command you can run.
+European, American and path-dependent option pricing in Python: closed-form
+Black-Scholes, Monte Carlo with antithetic variates, implied volatility by root
+finding, SVI calibration across a term structure, a binomial tree for early
+exercise and path simulation for Asians and barriers. Every number in this
+README comes from a command you can run.
 
 ![Monte Carlo convergence](docs/monte_carlo_convergence.png)
 
@@ -17,6 +18,8 @@ Every number in this README comes from a command you can run.
 ![Early exercise](docs/early_exercise.png)
 
 ![Real volatility smile](docs/real_smile.png)
+
+![Barrier curve](docs/barrier_curve.png)
 
 ## Results
 
@@ -108,6 +111,27 @@ The snapshot is downloaded by `scripts/fetch_binance.py` and versioned so the
 repository works without network access. `scripts/real_smile.py` rebuilds the
 figure from the CSV.
 
+## Path-dependent options
+
+Asian and barrier options are priced by Monte Carlo over full price paths. The
+table uses 200,000 paths and 100 steps.
+
+| Option | Price | Standard error |
+| --- | --- | --- |
+| Asian call, arithmetic average | 5.797045 | 0.017937 |
+| Up-and-out call, barrier 120 | 1.424428 | 0.007951 |
+| Up-and-out call, barrier 150 | 7.854730 | 0.024648 |
+| Up-and-out call, barrier 200 | 10.363996 | 0.032452 |
+| European call | 10.450584 | analytic |
+
+The Asian is much cheaper than the European because averaging removes variance.
+The barrier converges to the European price as the level moves away, which is
+what the last figure shows.
+
+Barriers are monitored at the simulation steps, not continuously. That
+overprices knock-outs slightly, because a path can cross and come back between
+two steps. The code does not pretend otherwise.
+
 ## No arbitrage
 
 Two conditions are checked on every calibrated slice.
@@ -149,11 +173,12 @@ with explicit non-linear constraints, and it is not implemented.
   slice, plus a 3D surface by interpolation in log time.
 - American and European prices on the same binomial tree, with the early
   exercise premium measured directly.
+- Asian and barrier options by Monte Carlo over simulated paths.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
 - Butterfly and calendar diagnostics, plus a soft calendar penalty between
   consecutive expiries.
-- Five figures that regenerate from a script.
+- Six figures that regenerate from a script.
 
 ## Install
 
@@ -171,6 +196,8 @@ python -m options_pricer price --spot 100 --strike 100 --rate 0.05 --vol 0.2 --e
 python -m options_pricer mc --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --paths 1000000
 python -m options_pricer iv --spot 100 --strike 100 --rate 0.05 --expiry 1 --price 10.45
 python -m options_pricer american --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --type put
+python -m options_pricer asian --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --type call
+python -m options_pricer barrier --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 --barrier 120 --kind up-and-out
 python -m options_pricer surface
 python -m options_pricer surface --all
 python scripts/make_figures.py
@@ -215,7 +242,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-47 tests cover:
+55 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -240,6 +267,9 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
   vol points and recovering the forward from put-call parity.
 - Butterfly positivity on a regular slice, detection of a pathological one, and
   calendar gaps with the expected sign in both directions.
+- Asian and barrier prices: a one-step Asian matching the European price, an
+  Asian below the European, a far barrier matching the European, knock-in plus
+  knock-out adding up to the European, and reproducibility from a seed.
 
 CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12
 and 3.13.
@@ -250,7 +280,11 @@ and 3.13.
   tree costs O(steps^2) and carries a discretisation error of a few cents at
   1,000 steps. The premium is the difference between two trees, so that error
   partially cancels.
-- Exotic payoffs: none. No barriers, Asians, lookbacks or Bermudan schedules.
+- Exotic payoffs beyond Asians and barriers: no lookbacks, no cliquets, no
+  Bermudan schedules.
+- Barrier monitoring is discrete at the simulation steps. Continuous monitoring
+  needs a Brownian bridge correction or a much finer time grid.
+- No Greeks for path-dependent options.
 - Black-Scholes assumes constant volatility and lognormal returns. The smile in
   the second figure exists because that assumption is false.
 - The surface is an interpolation of the five SVI parameters in log time between
@@ -304,12 +338,20 @@ suave, la violación baja a 3,3e-07, ruido numérico, a cambio de empeorar el RM
 del vencimiento intermedio de 0,0021 a 0,0038. Es una restricción blanda, no una
 garantía formal.
 
-Los 47 tests cubren los precios de referencia, la paridad put-call, las griegas
+También hay opciones dependientes de la trayectoria. La asiática aritmética de
+referencia vale 5,797045 con un error estándar de 0,017937, muy por debajo de la
+europea porque promediar reduce la varianza. La up-and-out con barrera en 120
+vale 1,424428, con barrera en 150 vale 7,854730 y con barrera en 200 se acerca a
+la europea, 10,363996. La barrera se vigila en los pasos de simulación, no de
+forma continua, y eso sobrevalora ligeramente las knock-out. Está escrito.
+
+Los 55 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del
-snapshot real y los diagnósticos de mariposa y calendario. Vanna, volga y charm
-se comprueban contra diferencias finitas centrales de delta y vega.
+snapshot real, los diagnósticos de mariposa y calendario, y las relaciones entre
+asiáticas, barreras y europeas. Vanna, volga y charm se comprueban contra
+diferencias finitas centrales de delta y vega.
 
 ## License
 

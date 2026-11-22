@@ -9,6 +9,7 @@ from .american import binomial
 from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
 from .monte_carlo import price_european
+from .path_dependent import asian_price, barrier_price
 from .surface import (
     SviParams,
     calibrate,
@@ -48,6 +49,24 @@ def main(argv: list[str] | None = None) -> int:
     _common(american_parser)
     american_parser.add_argument("--steps", type=int, default=1_000)
     american_parser.add_argument("--dividend", type=float, default=0.0)
+
+    asian_parser = sub.add_parser("asian", help="arithmetic-average Asian option")
+    _common(asian_parser)
+    asian_parser.add_argument("--steps", type=int, default=100)
+    asian_parser.add_argument("--paths", type=int, default=100_000)
+    asian_parser.add_argument("--seed", type=int, default=42)
+
+    barrier_parser = sub.add_parser("barrier", help="barrier option with discrete monitoring")
+    _common(barrier_parser)
+    barrier_parser.add_argument("--barrier", type=float, required=True)
+    barrier_parser.add_argument(
+        "--kind",
+        choices=["up-and-out", "up-and-in", "down-and-out", "down-and-in"],
+        default="up-and-out",
+    )
+    barrier_parser.add_argument("--steps", type=int, default=100)
+    barrier_parser.add_argument("--paths", type=int, default=100_000)
+    barrier_parser.add_argument("--seed", type=int, default=42)
 
     surface_parser = sub.add_parser("surface", help="calibrate a synthetic SVI smile")
     surface_parser.add_argument("--spot", type=float, default=100.0)
@@ -113,6 +132,29 @@ def main(argv: list[str] | None = None) -> int:
         print(f"european  {result.european:.6f}")
         print(f"premium   {result.premium:.6f}")
         print(f"steps     {result.steps}")
+        return 0
+
+    if args.command == "asian":
+        result = asian_price(
+            args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
+            steps=args.steps, paths=args.paths, seed=args.seed,
+        )
+        print(f"price  {result.price:.6f}")
+        print(f"stderr {result.standard_error:.6f}")
+        print(f"95% ci [{result.ci_low:.6f}, {result.ci_high:.6f}]")
+        print(f"paths  {result.paths}  steps {result.steps}")
+        return 0
+
+    if args.command == "barrier":
+        result = barrier_price(
+            args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
+            barrier=args.barrier, kind=args.kind, steps=args.steps,
+            paths=args.paths, seed=args.seed,
+        )
+        print(f"price  {result.price:.6f}")
+        print(f"stderr {result.standard_error:.6f}")
+        print(f"95% ci [{result.ci_low:.6f}, {result.ci_high:.6f}]")
+        print(f"kind   {args.kind} at {args.barrier}")
         return 0
 
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
