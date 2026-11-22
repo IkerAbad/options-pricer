@@ -6,6 +6,10 @@ Conventions:
 - vega is the derivative with respect to volatility in units (0.20, not 20).
 - theta is the derivative with respect to calendar time, per year.
 - rho is the derivative with respect to the continuously compounded rate.
+- vanna is the cross derivative with respect to spot and volatility.
+- volga is the second derivative with respect to volatility.
+- charm is minus the derivative of delta with respect to time to expiry, so it
+  measures how delta changes as calendar time passes. Calls and puts share it.
 """
 
 from __future__ import annotations
@@ -26,6 +30,9 @@ class Greeks:
     vega: float
     theta: float
     rho: float
+    vanna: float
+    volga: float
+    charm: float
 
 
 def _validate(spot: float, strike: float, vol: float, expiry: float) -> None:
@@ -91,6 +98,13 @@ def greeks(
 
     gamma = pdf_d1 / (spot * vol * sqrt_t)
     vega = spot * pdf_d1 * sqrt_t
+    vanna = -pdf_d1 * d2 / vol
+    volga = vega * d1 * d2 / vol
+    charm = (
+        pdf_d1
+        * (math.log(spot / strike) - (rate + 0.5 * vol * vol) * expiry)
+        / (2.0 * vol * expiry * sqrt_t)
+    )
     theta_common = -spot * pdf_d1 * vol / (2.0 * sqrt_t)
 
     if option_type == "call":
@@ -104,4 +118,13 @@ def greeks(
     else:
         raise ValueError("option_type must be 'call' or 'put'")
 
-    return Greeks(delta=delta, gamma=gamma, vega=vega, theta=theta, rho=rho)
+    return Greeks(
+        delta=delta,
+        gamma=gamma,
+        vega=vega,
+        theta=theta,
+        rho=rho,
+        vanna=vanna,
+        volga=volga,
+        charm=charm,
+    )

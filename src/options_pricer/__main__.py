@@ -69,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"vega   {g.vega:.6f}")
         print(f"theta  {g.theta:.6f}")
         print(f"rho    {g.rho:.6f}")
+        print(f"vanna  {g.vanna:.6f}")
+        print(f"volga  {g.volga:.6f}")
+        print(f"charm  {g.charm:.6f}")
         return 0
 
     if args.command == "mc":

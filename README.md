@@ -28,6 +28,9 @@ Reference case: spot 100, strike 100, rate 5%, volatility 20%, expiry 1 year.
 | Vega | 37.524035 |
 | Theta | -6.414028 |
 | Rho | 53.232482 |
+| Vanna | -0.281430 |
+| Volga | 9.850059 |
+| Charm | -0.065667 |
 | Monte Carlo, 1,000,000 paths | 10.456536 |
 | Standard error | 0.014737 |
 | 95% interval | [10.427652, 10.485419] |
@@ -78,7 +81,8 @@ changes that, and the tree finds the value of the early exercise right.
 
 ## What it does
 
-- Black-Scholes prices and first-order Greeks for European calls and puts.
+- Black-Scholes prices and first and second order Greeks for European calls and
+  puts.
 - Monte Carlo under the exact lognormal terminal distribution, not an Euler
   discretisation, with antithetic variates, standard error and a 95 % interval.
 - Implied volatility by Brent root finding, with an explicit rejection of prices
@@ -150,11 +154,13 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-37 tests cover:
+40 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
 - Greeks at the reference point and their signs.
+- Vanna, volga and charm matching central finite differences of delta and vega,
+  and agreeing between calls and puts.
 - Monte Carlo interval containing the analytic price.
 - Exact put-call parity per path using the sample mean terminal price.
 - Error shrinking as the square root of the number of paths.
@@ -190,7 +196,6 @@ and 3.13.
   meant to be read as ground truth.
 - The market is synthetic. The repo does not download quotes, so it cannot be
   validated against a real chain without adding a data source.
-- First-order Greeks only. No vanna, volga or charm.
 
 ## Español
 
@@ -216,10 +221,11 @@ en todas las slices. La superficie de la tercera figura es una interpolación de
 los cinco parámetros en tiempo logarítmico, no un modelo continuo libre de
 arbitraje.
 
-Los 37 tests cubren los precios de referencia, la paridad put-call, las griegas,
-la convergencia del error como 1/√N, la recuperación de la volatilidad implícita,
-la calibración de una sonrisa, la estabilidad de la estructura temporal y las
-propiedades del ejercicio anticipado.
+Los 40 tests cubren los precios de referencia, la paridad put-call, las griegas
+de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
+de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
+estructura temporal y las propiedades del ejercicio anticipado. Vanna, volga y
+charm se comprueban contra diferencias finitas centrales de delta y vega.
 
 ## License
 

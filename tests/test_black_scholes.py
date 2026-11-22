@@ -60,3 +60,42 @@ def test_invalid_inputs() -> None:
         price("call", SPOT, STRIKE, RATE, VOL, 0.0)
     with pytest.raises(ValueError):
         price("digital", SPOT, STRIKE, RATE, VOL, EXPIRY)
+
+
+def test_second_order_greeks_match_finite_differences() -> None:
+    step = 1e-4
+    base = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY)
+
+    vega_spot_up = greeks("call", SPOT + step, STRIKE, RATE, VOL, EXPIRY).vega
+    vega_spot_down = greeks("call", SPOT - step, STRIKE, RATE, VOL, EXPIRY).vega
+    assert base.vanna == pytest.approx(
+        (vega_spot_up - vega_spot_down) / (2.0 * step), rel=1e-4
+    )
+
+    vega_vol_up = greeks("call", SPOT, STRIKE, RATE, VOL + step, EXPIRY).vega
+    vega_vol_down = greeks("call", SPOT, STRIKE, RATE, VOL - step, EXPIRY).vega
+    assert base.volga == pytest.approx(
+        (vega_vol_up - vega_vol_down) / (2.0 * step), rel=1e-4
+    )
+
+    delta_expiry_up = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY + step).delta
+    delta_expiry_down = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY - step).delta
+    assert base.charm == pytest.approx(
+        -(delta_expiry_up - delta_expiry_down) / (2.0 * step), rel=1e-3
+    )
+
+
+def test_second_order_greeks_are_shared_by_calls_and_puts() -> None:
+    call = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY)
+    put = greeks("put", SPOT, STRIKE, RATE, VOL, EXPIRY)
+
+    assert call.vanna == pytest.approx(put.vanna, rel=1e-12)
+    assert call.volga == pytest.approx(put.volga, rel=1e-12)
+    assert call.charm == pytest.approx(put.charm, rel=1e-12)
+
+
+def test_second_order_greek_signs_at_the_money() -> None:
+    result = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY)
+    assert result.vanna < 0.0
+    assert result.volga > 0.0
+    assert result.charm < 0.0
