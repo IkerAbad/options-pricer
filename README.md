@@ -100,8 +100,8 @@ need.
 | Expiry | Days | Forward | Quotes | RMSE |
 | --- | --- | --- | --- | --- |
 | 2026-12-25 | 32.5 | 60,875.00 | 75 | 1.57 vol points |
-| 2027-01-29 | 67.5 | 61,127.50 | 85 | 0.21 vol points |
-| 2027-03-26 | 123.5 | 61,627.50 | 78 | 0.35 vol points |
+| 2027-01-29 | 67.5 | 61,127.50 | 85 | 0.42 vol points |
+| 2027-03-26 | 123.5 | 61,627.50 | 78 | 0.58 vol points |
 
 The short expiry is the hard one. A five-parameter SVI cannot follow the full
 curvature of a 33-day crypto smile, and the fit leaves 1.57 vol points of RMSE.
@@ -132,6 +132,11 @@ Barriers are monitored at the simulation steps, not continuously. That
 overprices knock-outs slightly, because a path can cross and come back between
 two steps. The code does not pretend otherwise.
 
+Delta, vega and theta for the barrier at 200 come from bump and reprice with
+common random numbers: 0.623412, 33.576223 and -5.987842. Gamma is not reported
+because the second difference is the same order as the Monte Carlo noise at
+these path counts.
+
 ## No arbitrage
 
 Two conditions are checked on every calibrated slice.
@@ -152,10 +157,13 @@ On the real snapshot the three slices are butterfly-free: zero per cent of the
 grid points violate `g >= 0`. Calendar is tighter. Fitting each expiry
 independently leaves a gap of -0.0156 between the first two expiries, so the
 short slice carries more total variance than the long one somewhere in the
-wings. The long slice is refitted with a soft penalty that pushes its total
-variance above the previous one. The gap falls to -3.3e-07, which is numerical
-noise, and the price is a worse fit: the RMSE of the middle expiry goes from
-0.0021 to 0.0038.
+wings. The long slice is then refitted with the calendar constraint imposed by
+SLSQP instead of a penalty. The gap becomes +9.99e-15, zero to machine
+precision, and the price is a worse fit: the RMSE of the middle expiry goes from
+0.0021 to 0.0042, and the last one from 0.0035 to 0.0058.
+
+The hard constraint is opt-in through `hard_calendar=True`. SLSQP can fail to
+converge on a difficult slice, so the default remains the soft penalty.
 
 That is a soft constraint, not a theorem. A hard guarantee needs an optimizer
 with explicit non-linear constraints, and it is not implemented.
@@ -174,6 +182,7 @@ with explicit non-linear constraints, and it is not implemented.
 - American and European prices on the same binomial tree, with the early
   exercise premium measured directly.
 - Asian and barrier options by Monte Carlo over simulated paths.
+- Barrier delta, vega and theta by bump and reprice with common random numbers.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
 - Butterfly and calendar diagnostics, plus a soft calendar penalty between
@@ -242,7 +251,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-55 tests cover:
+60 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -293,8 +302,8 @@ and 3.13.
 - SVI with five parameters is not uniquely identified by a handful of quotes.
   The chain and the ridge term stabilise it, and the fitted parameters are not
   meant to be read as ground truth.
-- The calendar constraint is a soft penalty, not a hard guarantee. The gap is
-  pushed to numerical noise, not proven to be non-negative.
+- The hard calendar constraint uses SLSQP, which can fail to converge on a
+  difficult slice. The fitted parameters are a local optimum, not a global one.
 - The real data is a single snapshot of Binance BTC options. There is no time
   series, no second underlying and no execution costs.
 
@@ -333,10 +342,11 @@ parámetros no sigue toda la curvatura de una sonrisa de cripto a un mes.
 El ajuste se comprueba contra dos condiciones de no arbitraje. La de mariposa,
 con la función de Gatheral, no se viola en ningún punto de las tres slices. La de
 calendario sí: calibrando cada vencimiento por separado, la varianza total cae al
-alargar el plazo en 0,0156. Al reajustar la slice larga con una penalización
-suave, la violación baja a 3,3e-07, ruido numérico, a cambio de empeorar el RMSE
-del vencimiento intermedio de 0,0021 a 0,0038. Es una restricción blanda, no una
-garantía formal.
+alargar el plazo en 0,0156. Al reajustar la slice larga con la restricción
+impuesta por SLSQP, la violación desaparece, el gap queda en 9,99e-15, a cambio
+de empeorar el RMSE del vencimiento intermedio de 0,0021 a 0,0042 y el del último
+de 0,0035 a 0,0058. La restricción dura es opcional porque SLSQP puede no
+converger en una slice difícil.
 
 También hay opciones dependientes de la trayectoria. La asiática aritmética de
 referencia vale 5,797045 con un error estándar de 0,017937, muy por debajo de la
@@ -345,7 +355,12 @@ vale 1,424428, con barrera en 150 vale 7,854730 y con barrera en 200 se acerca a
 la europea, 10,363996. La barrera se vigila en los pasos de simulación, no de
 forma continua, y eso sobrevalora ligeramente las knock-out. Está escrito.
 
-Los 55 tests cubren los precios de referencia, la paridad put-call, las griegas
+Las griegas de la barrera en 200 salen de recalcular el precio con perturbaciones
+y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
+No se publica gamma porque la segunda diferencia queda al nivel del ruido de
+Monte Carlo con este número de caminos.
+
+Los 60 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del

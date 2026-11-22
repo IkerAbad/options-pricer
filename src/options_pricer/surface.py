@@ -14,7 +14,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, minimize
 
 from . import black_scholes
 from .black_scholes import OptionType
@@ -217,6 +217,66 @@ def _fit(
     return params, rmse
 
 
+def _fit_hard(
+    expiry: float,
+    ks: list[float],
+    widths: list[float],
+    initial: SviParams | None,
+    ridge: float,
+    floor: SviParams,
+) -> tuple[SviParams, float]:
+    """Fit with the calendar constraint imposed as an explicit inequality.
+
+    least_squares only takes box bounds, so this path uses SLSQP with one
+    inequality per grid point. It is slower and can fail to converge, which is
+    why it is opt-in.
+    """
+    grid = np.linspace(-1.0, 1.0, 41)
+    floor_values = np.array([total_variance(k, floor) for k in grid])
+
+    if initial is None:
+        guess = np.array([max(min(widths) * 0.8, 1e-3), 0.10, -0.30, 0.0, 0.10])
+    else:
+        guess = np.array(
+            [initial.a, initial.b, initial.rho, initial.m, initial.sigma], dtype=float
+        )
+
+    lower = np.array([-0.05, 0.0, -0.999, -0.5, 0.01])
+    upper = np.array([0.30, 1.0, 0.999, 0.5, 0.50])
+    guess = np.clip(guess, lower + 1e-9, upper - 1e-9)
+
+    def objective(theta: np.ndarray) -> float:
+        candidate = SviParams(*[float(value) for value in theta])
+        market = sum(
+            (total_variance(k, candidate) - w) ** 2 for k, w in zip(ks, widths)
+        )
+        shrink = ridge * float(np.sum((theta - guess) ** 2))
+        return market + shrink
+
+    def constraint(theta: np.ndarray) -> np.ndarray:
+        candidate = SviParams(*[float(value) for value in theta])
+        return np.array(
+            [total_variance(k, candidate) - value for k, value in zip(grid, floor_values)]
+        )
+
+    result = minimize(
+        objective,
+        guess,
+        method="SLSQP",
+        bounds=list(zip(lower, upper)),
+        constraints=[{"type": "ineq", "fun": constraint}],
+        options={"maxiter": 1_000, "ftol": 1e-12},
+    )
+
+    params = SviParams(*[float(value) for value in result.x])
+    squared_errors = [
+        (svi_implied_vol(k, expiry, params) - math.sqrt(w / expiry)) ** 2
+        for k, w in zip(ks, widths)
+    ]
+    rmse = math.sqrt(sum(squared_errors) / len(squared_errors))
+    return params, rmse
+
+
 def calibrate_from_vols(
     expiry: float,
     log_moneyness: list[float],
@@ -225,12 +285,14 @@ def calibrate_from_vols(
     ridge: float = 1e-3,
     floor: SviParams | None = None,
     floor_weight: float = 10.0,
+    hard_calendar: bool = False,
 ) -> tuple[SviParams, float]:
     """Fit an SVI slice directly to implied volatilities, without going through prices.
 
     When floor is given, total variance is pushed to stay above that slice at
     every point of the grid, which removes calendar arbitrage against the
-    previous maturity.
+    previous maturity. With hard_calendar the constraint is imposed by SLSQP
+    instead of a penalty.
     """
     if len(log_moneyness) != len(vols):
         raise ValueError("log_moneyness and vols must have the same length")
@@ -238,7 +300,13 @@ def calibrate_from_vols(
         raise ValueError("SVI has five parameters, at least five quotes are needed")
 
     widths = [vol * vol * expiry for vol in vols]
-    return _fit(expiry, log_moneyness, widths, initial, ridge, floor, floor_weight)
+
+    if hard_calendar and floor is not None:
+        return _fit_hard(expiry, log_moneyness, widths, initial, ridge, floor)
+
+    return _fit(
+        expiry, log_moneyness, widths, initial, ridge, floor, floor_weight
+    )
 
 
 def calibrate_surface(

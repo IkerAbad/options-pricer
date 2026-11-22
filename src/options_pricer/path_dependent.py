@@ -30,6 +30,14 @@ class PathResult:
     steps: int
 
 
+@dataclass(frozen=True)
+class PathGreeks:
+    price: float
+    delta: float
+    vega: float
+    theta: float
+
+
 def simulate_paths(
     spot: float,
     rate: float,
@@ -132,3 +140,50 @@ def barrier_price(
 
     payoff = np.where(alive, _intrinsic(option_type, matrix[:, -1], strike), 0.0)
     return _summarise(payoff, rate, expiry, paths, steps)
+
+
+def barrier_greeks(
+    option_type: OptionType,
+    spot: float,
+    strike: float,
+    rate: float,
+    vol: float,
+    expiry: float,
+    barrier: float,
+    kind: BarrierKind = "up-and-out",
+    steps: int = 100,
+    paths: int = 200_000,
+    seed: int = 42,
+    bump: float = 0.01,
+) -> PathGreeks:
+    """Delta, vega and theta by bump and reprice with common random numbers.
+
+    Every repricing uses the same seed, so the Monte Carlo noise cancels in the
+    finite difference. Gamma is not returned: the second difference is the same
+    order as the remaining noise unless the path count is much larger.
+    """
+    if bump <= 0.0:
+        raise ValueError("bump must be positive")
+    if expiry <= bump:
+        raise ValueError("expiry must be larger than the bump for theta")
+
+    def price_at(new_spot: float, new_vol: float, new_expiry: float) -> float:
+        return barrier_price(
+            option_type, new_spot, strike, rate, new_vol, new_expiry,
+            barrier, kind, steps, paths, seed,
+        ).price
+
+    base = price_at(spot, vol, expiry)
+    up_spot = price_at(spot * (1.0 + bump), vol, expiry)
+    down_spot = price_at(spot * (1.0 - bump), vol, expiry)
+    up_vol = price_at(spot, vol + bump, expiry)
+    down_vol = price_at(spot, vol - bump, expiry)
+    up_time = price_at(spot, vol, expiry + bump)
+    down_time = price_at(spot, vol, expiry - bump)
+
+    return PathGreeks(
+        price=base,
+        delta=(up_spot - down_spot) / (2.0 * spot * bump),
+        vega=(up_vol - down_vol) / (2.0 * bump),
+        theta=-(up_time - down_time) / (2.0 * bump),
+    )

@@ -55,7 +55,7 @@ def main() -> None:
 
         params, rmse = calibrate_from_vols(
             current.years, current.log_moneyness, current.vols,
-            initial=previous, ridge=1e-2, floor=previous, floor_weight=100.0,
+            initial=previous, ridge=1e-2, floor=previous, hard_calendar=True,
         )
         previous = params
         fits[expiry] = (current, params, rmse)

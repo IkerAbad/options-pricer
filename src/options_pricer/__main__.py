@@ -9,7 +9,7 @@ from .american import binomial
 from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
 from .monte_carlo import price_european
-from .path_dependent import asian_price, barrier_price
+from .path_dependent import asian_price, barrier_greeks, barrier_price
 from .surface import (
     SviParams,
     calibrate,
@@ -67,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     barrier_parser.add_argument("--steps", type=int, default=100)
     barrier_parser.add_argument("--paths", type=int, default=100_000)
     barrier_parser.add_argument("--seed", type=int, default=42)
+    barrier_parser.add_argument("--greeks", action="store_true")
 
     surface_parser = sub.add_parser("surface", help="calibrate a synthetic SVI smile")
     surface_parser.add_argument("--spot", type=float, default=100.0)
@@ -146,6 +147,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "barrier":
+        if args.greeks:
+            values = barrier_greeks(
+                args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
+                barrier=args.barrier, kind=args.kind, steps=args.steps,
+                paths=args.paths, seed=args.seed,
+            )
+            print(f"price  {values.price:.6f}")
+            print(f"delta  {values.delta:.6f}")
+            print(f"vega   {values.vega:.6f}")
+            print(f"theta  {values.theta:.6f}")
+            print(f"kind   {args.kind} at {args.barrier}")
+            return 0
+
         result = barrier_price(
             args.type, args.spot, args.strike, args.rate, args.vol, args.expiry,
             barrier=args.barrier, kind=args.kind, steps=args.steps,
