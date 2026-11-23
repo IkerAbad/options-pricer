@@ -17,6 +17,12 @@ from options_pricer.american import binomial
 from options_pricer.black_scholes import call_price, greeks, put_price
 from options_pricer.implied_vol import implied_volatility
 from options_pricer.path_dependent import asian_price, barrier_price
+from options_pricer.path_greeks import (
+    asian_greeks_fd,
+    asian_greeks_lr,
+    barrier_greeks_fd,
+    barrier_greeks_lr,
+)
 from options_pricer.surface import SviParams, calibrate, synthetic_market
 
 REFERENCE = Path(__file__).parent / "data" / "reference_values.json"
@@ -99,3 +105,53 @@ def test_svi_calibration_rmse() -> None:
     quotes = synthetic_market(SPOT, 0.03, EXPIRY, strikes, truth, noise=0.001, seed=1)
     _, rmse = calibrate(SPOT, 0.03, EXPIRY, strikes, quotes)
     assert rmse == pytest.approx(VALUES["svi_rmse"], abs=1e-9)
+
+
+def test_asian_greeks() -> None:
+    finite = asian_greeks_fd(
+        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, steps=50, paths=200_000, seed=7
+    )
+    ratio = asian_greeks_lr(
+        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, steps=50, paths=1_000_000, seed=7
+    )
+
+    assert finite.delta == pytest.approx(VALUES["asian_fd_delta"], rel=1e-9)
+    assert finite.gamma == pytest.approx(VALUES["asian_fd_gamma"], rel=1e-9)
+    assert finite.vega == pytest.approx(VALUES["asian_fd_vega"], rel=1e-9)
+    assert ratio.delta == pytest.approx(VALUES["asian_lr_delta"], rel=1e-9)
+    assert ratio.gamma == pytest.approx(VALUES["asian_lr_gamma"], rel=1e-9)
+    assert ratio.vega == pytest.approx(VALUES["asian_lr_vega"], rel=1e-9)
+
+
+def test_barrier_greeks() -> None:
+    finite = barrier_greeks_fd(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=200_000,
+        seed=7,
+    )
+    ratio = barrier_greeks_lr(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=1_000_000,
+        seed=7,
+    )
+
+    assert finite.delta == pytest.approx(VALUES["barrier_fd_delta"], rel=1e-9)
+    assert finite.gamma == pytest.approx(VALUES["barrier_fd_gamma"], rel=1e-9)
+    assert finite.vega == pytest.approx(VALUES["barrier_fd_vega"], rel=1e-9)
+    assert ratio.delta == pytest.approx(VALUES["barrier_lr_delta"], rel=1e-9)
+    assert ratio.gamma == pytest.approx(VALUES["barrier_lr_gamma"], rel=1e-9)
+    assert ratio.vega == pytest.approx(VALUES["barrier_lr_vega"], rel=1e-9)

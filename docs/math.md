@@ -118,3 +118,76 @@ w(k, T2) >= w(k, T1)   for T2 > T1
 The default calibration penalises violations softly. `hard_calendar=True` imposes
 the inequality with SLSQP, one constraint per grid point, at the cost of a slower
 fit and a higher RMSE.
+
+## Path-dependent Greeks
+
+Two independent estimators for delta, gamma and vega of an Asian or barrier
+option.
+
+### Finite differences with common random numbers
+
+Reprice at `S(1+h)`, `S(1-h)`, `σ+h` and `σ-h` with the same seed. The shocks are
+identical, so the Monte Carlo noise cancels in the difference:
+
+```
+delta = (P(S(1+h)) - P(S(1-h))) / (2 S h)
+gamma = (P(S(1+h)) - 2 P(S) + P(S(1-h))) / (S h)^2
+vega  = (P(σ+h) - P(σ-h)) / (2 h)
+```
+
+The variance is low, but the barrier payoff is discontinuous. A bump moves paths
+across the barrier, so the difference includes a jump that does not shrink with
+`h`. The estimator is biased for any finite bump.
+
+### Likelihood ratio
+
+Hold the payoff fixed and differentiate the density instead. With log-returns
+`Δx_i ~ N(μ dt, σ² dt)` and `d_i = Δx_i - μ dt`, the scores are
+
+```
+score_S = (Δx_1 - μ dt) / (S σ² dt)
+score_σ = Σ_i [ -(1 + d_i)/σ + d_i² / (σ³ dt) ]
+
+delta = E[P score_S]
+gamma = E[P (score_S² + ∂score_S/∂S)]
+vega  = E[P score_σ]
+```
+
+with
+
+```
+∂score_S/∂S = -(1 + Δx_1 - μ dt) / (S² σ² dt)
+```
+
+The spot enters only the first transition, because the log-returns are
+independent of the initial level. The volatility enters every transition, which
+is why its score is a sum and its variance is larger. Using the terminal score
+for the spot is wrong for a path-dependent payoff: it is only valid when the
+payoff is a function of the terminal price alone.
+
+### Why the likelihood ratio is more stable near the barrier
+
+The barrier payoff is discontinuous. Finite differences differentiate the payoff,
+and a tiny bump can move a path from below the barrier to above it. That jump
+enters the difference with a weight of `1/(2h)`, so the estimator carries a bias
+that does not vanish as `h → 0`. The likelihood ratio holds the payoff fixed and
+moves the density, so the discontinuity never enters. The cost is variance, not
+bias.
+
+Measured on this repository with 100,000 paths for finite differences and
+1,000,000 for the likelihood ratio, errors relative to a likelihood-ratio
+reference with 2,000,000 paths:
+
+| Option | Method | Delta | Gamma | Vega | Time |
+| --- | --- | --- | --- | --- | --- |
+| Asian call | FD, common paths | 0.15 % | 2.14 % | 0.26 % | 1.33 s |
+| Asian call | FD, independent paths | 0.32 % | 123.55 % | 0.93 % | 1.29 s |
+| Asian call | Likelihood ratio | 0.72 % | 0.44 % | 2.82 % | 4.60 s |
+| Up-and-out, barrier 120 | FD, common paths | 50.33 % | 103.79 % | 5.77 % | 1.27 s |
+| Up-and-out, barrier 120 | FD, independent paths | 43.01 % | 243.05 % | 7.84 % | 1.29 s |
+| Up-and-out, barrier 120 | Likelihood ratio | 2.20 % | 13.13 % | 1.21 % | 4.27 s |
+
+For the Asian, finite differences are cheaper and accurate. For the barrier, the
+discontinuity breaks them: the delta error is tens of percent, while the
+likelihood ratio stays in single digits. The price is time and variance, and the
+barrier gamma remains the hardest quantity either way.

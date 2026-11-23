@@ -222,6 +222,31 @@ Barriers are monitored at the simulation steps, not continuously. That
 overprices knock-outs slightly, because a path can cross and come back between
 two steps. The code does not pretend otherwise.
 
+### Greeks
+
+Delta, gamma and vega for both families come from two independent estimators.
+Finite differences with common random numbers reprice with the same seed, so the
+Monte Carlo noise cancels. The likelihood ratio keeps the payoff fixed and
+differentiates the density instead.
+
+| Option | Method | Delta | Gamma | Vega | Time |
+| --- | --- | --- | --- | --- | --- |
+| Asian call | FD, common paths | 0.15 % | 2.14 % | 0.26 % | 1.33 s |
+| Asian call | FD, independent paths | 0.32 % | 123.55 % | 0.93 % | 1.29 s |
+| Asian call | Likelihood ratio | 0.72 % | 0.44 % | 2.82 % | 4.60 s |
+| Up-and-out, barrier 120 | FD, common paths | 50.33 % | 103.79 % | 5.77 % | 1.27 s |
+| Up-and-out, barrier 120 | FD, independent paths | 43.01 % | 243.05 % | 7.84 % | 1.29 s |
+| Up-and-out, barrier 120 | Likelihood ratio | 2.20 % | 13.13 % | 1.21 % | 4.27 s |
+
+Errors are relative to a likelihood-ratio reference with 2,000,000 paths. The
+continuous-monitoring and likelihood-ratio derivations are in `docs/math.md`.
+
+The barrier is where the two methods separate. Finite differences differentiate
+a discontinuous payoff, so a bump moves paths across the barrier and the
+estimator does not converge. The likelihood ratio keeps the payoff fixed and
+moves the density, so the discontinuity never enters. It costs more time and its
+vega has a larger variance, which is why it uses a million paths here.
+
 Delta, vega and theta for the barrier at 200 come from bump and reprice with
 common random numbers: 0.623412, 33.576223 and -5.987842. Gamma is not reported
 because the second difference is the same order as the Monte Carlo noise at
@@ -276,6 +301,8 @@ with explicit non-linear constraints, and it is not implemented.
 - Asian and barrier options by Monte Carlo over simulated paths, with optional
   antithetic sampling and a Brownian bridge approximation for continuous
   monitoring.
+- Path-dependent Greeks by finite differences with common paths and by
+  likelihood ratio, compared against each other.
 - Barrier delta, vega and theta by bump and reprice with common random numbers.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
@@ -359,7 +386,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-134 tests cover:
+141 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -415,7 +442,7 @@ mypy src/options_pricer
 pytest --cov=options_pricer --cov-report=term-missing
 ```
 
-Line coverage is 94 % with branch coverage enabled. CI runs lint, format, types,
+Line coverage is 93 % with branch coverage enabled. CI runs lint, format, types,
 tests and coverage on Ubuntu and Windows with Python 3.12, 3.13 and 3.14.
 
 ## Limitations
@@ -428,7 +455,10 @@ tests and coverage on Ubuntu and Windows with Python 3.12, 3.13 and 3.14.
   Bermudan schedules.
 - Barrier monitoring is discrete at the simulation steps. Continuous monitoring
   needs a Brownian bridge correction or a much finer time grid.
-- No Greeks for path-dependent options.
+- No Greeks for path-dependent options: delta, gamma and vega are available
+  through two estimators, and the comparison is documented. The likelihood ratio
+  vega needs about a million paths to be competitive, and the barrier gamma
+  remains noisy.
 - Black-Scholes assumes constant volatility and lognormal returns. The smile in
   the second figure exists because that assumption is false.
 - The surface is an interpolation of the five SVI parameters in log time between
@@ -495,13 +525,23 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 134 tests cubren los precios de referencia, la paridad put-call, las griegas
+También hay griegas para las opciones dependientes de la trayectoria, por dos
+métodos independientes. Las diferencias finitas con caminos comunes reprecian con
+la misma semilla y cancelan el ruido de Monte Carlo. El likelihood ratio mantiene
+el payoff fijo y deriva la densidad. En la asiática, las diferencias finitas son
+más baratas y precisas. En la barrera se rompen: el delta se desvía más del 40 %
+porque el payoff es discontinuo y un bump mueve caminos de un lado al otro. El
+likelihood ratio baja ese error al 2,2 %, a cambio de más tiempo y de una vega
+con más varianza. La tabla completa y la derivación están en el README y en
+`docs/math.md`.
+
+Los 141 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del
 snapshot real, los diagnósticos de mariposa y calendario, y las relaciones entre
 asiáticas, barreras y europeas. Vanna, volga y charm se comprueban contra
-diferencias finitas centrales de delta y vega. La cobertura de línea es del 94 %
+diferencias finitas centrales de delta y vega. La cobertura de línea es del 93 %
 con cobertura de ramas, y el CI ejecuta ruff, mypy, los tests y la cobertura en
 Ubuntu y Windows con Python 3.12, 3.13 y 3.14.
 

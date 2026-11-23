@@ -15,6 +15,12 @@ from options_pricer.american import binomial
 from options_pricer.black_scholes import call_price, greeks, put_price
 from options_pricer.implied_vol import implied_volatility
 from options_pricer.path_dependent import asian_price, barrier_price
+from options_pricer.path_greeks import (
+    asian_greeks_fd,
+    asian_greeks_lr,
+    barrier_greeks_fd,
+    barrier_greeks_lr,
+)
 from options_pricer.surface import SviParams, calibrate, synthetic_market
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,6 +43,37 @@ def main() -> None:
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
     quotes = synthetic_market(SPOT, 0.03, EXPIRY, strikes, truth, noise=0.001, seed=1)
     _, svi_rmse = calibrate(SPOT, 0.03, EXPIRY, strikes, quotes)
+
+    asian_fd = asian_greeks_fd(
+        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, steps=50, paths=200_000, seed=7
+    )
+    asian_lr = asian_greeks_lr(
+        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, steps=50, paths=1_000_000, seed=7
+    )
+    barrier_fd = barrier_greeks_fd(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=200_000,
+        seed=7,
+    )
+    barrier_lr = barrier_greeks_lr(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=1_000_000,
+        seed=7,
+    )
 
     values = {
         "black_scholes_call": call,
@@ -89,6 +126,18 @@ def main() -> None:
             continuous=True,
         ).price,
         "svi_rmse": svi_rmse,
+        "asian_fd_delta": asian_fd.delta,
+        "asian_fd_gamma": asian_fd.gamma,
+        "asian_fd_vega": asian_fd.vega,
+        "asian_lr_delta": asian_lr.delta,
+        "asian_lr_gamma": asian_lr.gamma,
+        "asian_lr_vega": asian_lr.vega,
+        "barrier_fd_delta": barrier_fd.delta,
+        "barrier_fd_gamma": barrier_fd.gamma,
+        "barrier_fd_vega": barrier_fd.vega,
+        "barrier_lr_delta": barrier_lr.delta,
+        "barrier_lr_gamma": barrier_lr.gamma,
+        "barrier_lr_vega": barrier_lr.vega,
     }
 
     TARGET.parent.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0
+
+First stable release.
+
+- European options: Black-Scholes with a continuous dividend yield, first and
+  second order Greeks, vectorised prices, deltas and vegas.
+- Options on forwards: Black-76 prices, forward Greeks and implied volatility.
+- American options: Cox-Ross-Rubinstein tree with dividends.
+- Path-dependent options: Asian and barrier prices by Monte Carlo, antithetic
+  sampling and Brownian bridge continuous monitoring.
+- Path-dependent Greeks: delta, gamma and vega by finite differences with common
+  paths and by likelihood ratio, compared and documented.
+- Volatility: implied volatility, SVI slices with soft and hard calendar
+  constraints, SSVI surfaces, butterfly and calendar diagnostics, bootstrap
+  intervals and out-of-sample validation.
+- Real data: versioned Binance BTC and ETH snapshots, spread-weighted
+  calibration.
+- Tooling: CLI with JSON output, 141 tests, 93 % branch coverage, ruff, mypy,
+  pip-audit, a packaging job and 29 frozen regression values.
+
 ## 0.8.0
 
 - `--continuous` propagated to barrier Greeks.
