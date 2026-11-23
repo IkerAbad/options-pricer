@@ -191,17 +191,26 @@ def _fit(
     ridge: float,
     floor: SviParams | None = None,
     floor_weight: float = 10.0,
+    weights: list[float] | None = None,
 ) -> tuple[SviParams, float]:
     calendar_grid = np.linspace(-1.0, 1.0, 41)
     floor_values = (
         np.array([total_variance(k, floor) for k in calendar_grid]) if floor is not None else None
     )
 
+    if weights is not None:
+        if len(weights) != len(widths):
+            raise ValueError("weights must have one entry per quote")
+        scale = np.sqrt(np.array(weights, dtype=float))
+    else:
+        scale = np.ones(len(widths))
+
     def residuals(theta: np.ndarray) -> np.ndarray:
         candidate = SviParams(*[float(value) for value in theta])
         market = np.array(
             [total_variance(k, candidate) - w for k, w in zip(ks, widths, strict=True)], dtype=float
         )
+        market = market * scale
         shrink = ridge * (theta - guess)
         parts = [market, shrink]
 
@@ -238,6 +247,7 @@ def _fit_hard(
     initial: SviParams | None,
     ridge: float,
     floor: SviParams,
+    weights: list[float] | None = None,
 ) -> tuple[SviParams, float]:
     """Fit with the calendar constraint imposed as an explicit inequality.
 
@@ -259,9 +269,16 @@ def _fit_hard(
 
     def objective(theta: np.ndarray) -> float:
         candidate = SviParams(*[float(value) for value in theta])
-        market = sum(
-            (total_variance(k, candidate) - w) ** 2 for k, w in zip(ks, widths, strict=True)
+        if weights is None:
+            weight_array = np.ones(len(widths))
+        else:
+            if len(weights) != len(widths):
+                raise ValueError("weights must have one entry per quote")
+            weight_array = np.array(weights, dtype=float)
+        errors = np.array(
+            [total_variance(k, candidate) - w for k, w in zip(ks, widths, strict=True)]
         )
+        market = float(np.sum(weight_array * errors * errors))
         shrink = ridge * float(np.sum((theta - guess) ** 2))
         return market + shrink
 
@@ -301,13 +318,14 @@ def calibrate_from_vols(
     floor: SviParams | None = None,
     floor_weight: float = 10.0,
     hard_calendar: bool = False,
+    weights: list[float] | None = None,
 ) -> tuple[SviParams, float]:
     """Fit an SVI slice directly to implied volatilities, without going through prices.
 
     When floor is given, total variance is pushed to stay above that slice at
     every point of the grid, which removes calendar arbitrage against the
     previous maturity. With hard_calendar the constraint is imposed by SLSQP
-    instead of a penalty.
+    instead of a penalty. Weights, when given, multiply each squared residual.
     """
     if len(log_moneyness) != len(vols):
         raise ValueError("log_moneyness and vols must have the same length")
@@ -317,9 +335,9 @@ def calibrate_from_vols(
     widths = [vol * vol * expiry for vol in vols]
 
     if hard_calendar and floor is not None:
-        return _fit_hard(expiry, log_moneyness, widths, initial, ridge, floor)
+        return _fit_hard(expiry, log_moneyness, widths, initial, ridge, floor, weights)
 
-    return _fit(expiry, log_moneyness, widths, initial, ridge, floor, floor_weight)
+    return _fit(expiry, log_moneyness, widths, initial, ridge, floor, floor_weight, weights)
 
 
 def calibrate_surface(

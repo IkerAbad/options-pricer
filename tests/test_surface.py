@@ -161,6 +161,18 @@ def test_calibrate_rejects_prices_without_a_valid_implied_vol() -> None:
         calibrate(SPOT, RATE, EXPIRY, STRIKES, [0.0] * len(STRIKES))
 
 
+def test_calibrate_from_vols_rejects_mismatched_weights() -> None:
+    with pytest.raises(ValueError):
+        calibrate_from_vols(EXPIRY, [0.0] * 5, [0.2] * 5, weights=[1.0] * 4)
+
+
+def test_weighted_calibration_converges() -> None:
+    ks = [-0.2, -0.1, 0.0, 0.1, 0.2]
+    vols = [svi_implied_vol(k, EXPIRY, PARAMS) for k in ks]
+    _, rmse = calibrate_from_vols(EXPIRY, ks, vols, weights=[1.0, 2.0, 3.0, 2.0, 1.0])
+    assert rmse < 1e-4
+
+
 def test_calibrate_surface_rejects_empty_input() -> None:
     with pytest.raises(ValueError):
         calibrate_surface(SPOT, RATE, [], STRIKES, [])

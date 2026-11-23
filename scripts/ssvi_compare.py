@@ -31,7 +31,9 @@ def main() -> None:
     ks = [current.log_moneyness for current in slices]
     vols = [current.vols for current in slices]
 
-    params, rmse, thetas = calibrate_ssvi(expiries, ks, vols)
+    params, rmse, thetas = calibrate_ssvi(
+        expiries, ks, vols, weights=[current.weights for current in slices]
+    )
     print(f"SSVI rho {params.rho:.4f}  eta {params.eta:.4f}  gamma {params.gamma:.4f}")
     print(f"SSVI arbitrage free: {is_arbitrage_free(params)}")
     print(f"SSVI global RMSE: {rmse:.6f}")
@@ -39,7 +41,11 @@ def main() -> None:
     print("expiry        theta     SVI rmse    SSVI rmse")
     for current, theta in zip(slices, thetas, strict=True):
         _, svi_rmse = calibrate_from_vols(
-            current.years, current.log_moneyness, current.vols, ridge=1e-2
+            current.years,
+            current.log_moneyness,
+            current.vols,
+            ridge=1e-2,
+            weights=current.weights,
         )
         errors = [
             (math.sqrt(max(total_variance(k, theta, params) / current.years, 1e-12)) - vol) ** 2

@@ -56,12 +56,13 @@ def _tree(
     if not 0.0 < probability < 1.0:
         raise ValueError("risk-neutral probability is outside (0, 1): increase the number of steps")
 
-    values = _intrinsic(option_type, _terminal_prices(spot, up, down, steps), strike)
+    prices = _terminal_prices(spot, up, down, steps)
+    values = _intrinsic(option_type, prices, strike)
 
-    for step in range(steps - 1, -1, -1):
+    for _ in range(steps - 1, -1, -1):
         values = discount * (probability * values[:-1] + (1.0 - probability) * values[1:])
+        prices = prices[:-1] * down
         if american:
-            prices = _terminal_prices(spot, up, down, step)
             values = np.maximum(values, _intrinsic(option_type, prices, strike))
 
     return float(values[0])

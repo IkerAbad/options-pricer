@@ -19,6 +19,8 @@ class Quote:
     side: str
     mid: float
     index: float
+    bid: float = 0.0
+    ask: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,7 @@ class Slice:
     log_moneyness: list[float]
     vols: list[float]
     strikes: list[float]
+    weights: list[float]
 
 
 def load_chain(path: Path) -> list[Quote]:
@@ -43,6 +46,8 @@ def load_chain(path: Path) -> list[Quote]:
                     side=row["side"],
                     mid=float(row["mid"]),
                     index=float(row["index"]),
+                    bid=float(row.get("bid", 0.0)),
+                    ask=float(row.get("ask", 0.0)),
                 )
             )
     return quotes
@@ -77,6 +82,7 @@ def build_slice(
     log_moneyness: list[float] = []
     vols: list[float] = []
     strikes: list[float] = []
+    weights: list[float] = []
 
     for quote in quotes:
         if not (min_moneyness * forward <= quote.strike <= max_moneyness * forward):
@@ -90,9 +96,19 @@ def build_slice(
         if not (0.02 < vol < 3.0):
             continue
 
+        spread = (
+            (quote.ask - quote.bid) / quote.mid
+            if quote.ask > quote.bid and quote.mid > 0.0
+            else 0.01
+        )
+
         log_moneyness.append(math.log(quote.strike / forward))
         vols.append(vol)
         strikes.append(quote.strike)
+        weights.append(1.0 / max(spread, 1e-4))
+
+    mean_weight = sum(weights) / len(weights) if weights else 1.0
+    weights = [weight / mean_weight for weight in weights]
 
     return Slice(
         expiry=quotes[0].expiry,
@@ -101,4 +117,5 @@ def build_slice(
         log_moneyness=log_moneyness,
         vols=vols,
         strikes=strikes,
+        weights=weights,
     )

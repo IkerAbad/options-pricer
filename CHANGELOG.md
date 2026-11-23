@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Quotes weighted by the inverse relative bid-ask spread.
+- The binomial tree updates its price vector incrementally, 2.5 times faster.
+- SSVI accepts the same weights as the slice calibration.
+- 120 tests.
+
 ## 0.4.0
 
 - SSVI surface calibration with three global parameters and a no-arbitrage

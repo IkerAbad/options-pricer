@@ -55,6 +55,7 @@ def main() -> None:
             initial=previous,
             floor=previous,
             hard_calendar=True,
+            weights=current.weights,
         )
         previous = params
         slices.append((current, params, rmse))

@@ -69,11 +69,12 @@ def calibrate_ssvi(
     expiries: list[float],
     log_moneyness: list[list[float]],
     vols: list[list[float]],
+    weights: list[list[float]] | None = None,
 ) -> tuple[SsviParams, float, list[float]]:
     """Fit rho, eta and gamma on all slices at once.
 
     Returns the parameters, the RMSE in implied volatility and the theta of each
-    expiry.
+    expiry. Weights, when given, multiply each squared residual.
     """
     if len(expiries) != len(log_moneyness) or len(expiries) != len(vols):
         raise ValueError("expiries, log_moneyness and vols must have the same length")
@@ -93,11 +94,22 @@ def calibrate_ssvi(
     if len(flat) < 3:
         raise ValueError("at least three quotes are needed for three parameters")
 
+    if weights is None:
+        flat_weights = np.ones(len(flat))
+    else:
+        if len(weights) != len(expiries):
+            raise ValueError("weights must have one entry per expiry")
+        flat_weights = np.array([weight for slice_weights in weights for weight in slice_weights])
+
     def residuals(x: np.ndarray) -> np.ndarray:
         candidate = SsviParams(rho=float(x[0]), eta=float(x[1]), gamma=float(x[2]))
-        errors = [total_variance(k, theta, candidate) - width for _, theta, k, width in flat]
+        errors = np.array(
+            [total_variance(k, theta, candidate) - width for _, theta, k, width in flat],
+            dtype=float,
+        )
+        errors = errors * np.sqrt(flat_weights)
         violation = max(0.0, candidate.eta * (1.0 + abs(candidate.rho)) - 3.9)
-        return np.array([*errors, 100.0 * violation], dtype=float)
+        return np.concatenate([errors, np.array([100.0 * violation])])
 
     guess = np.array([-0.4, 1.0, 0.4])
     lower = np.array([-0.999, 0.01, 0.01])

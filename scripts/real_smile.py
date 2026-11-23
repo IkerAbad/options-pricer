@@ -67,6 +67,7 @@ def main() -> None:
             ridge=1e-2,
             floor=previous,
             hard_calendar=True,
+            weights=current.weights,
         )
         previous = params
         fits[expiry] = (current, params, rmse)

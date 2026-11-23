@@ -49,6 +49,12 @@ def test_forward_is_above_the_index_for_this_snapshot(quotes: list[Quote]) -> No
     assert current.forward == pytest.approx(60_875.0, rel=1e-3)
 
 
+def test_slice_weights_have_mean_one(quotes: list[Quote]) -> None:
+    current = build_slice([quote for quote in quotes if quote.expiry == "2026-12-25"])
+    assert len(current.weights) == len(current.vols)
+    assert sum(current.weights) / len(current.weights) == pytest.approx(1.0)
+
+
 def test_forward_falls_back_to_the_index_without_a_pair() -> None:
     quotes = [
         Quote("2026-12-25", 32.5, 100.0, "C", 5.0, 101.0),

@@ -121,9 +121,13 @@ need.
 
 | Expiry | Days | Forward | Quotes | RMSE |
 | --- | --- | --- | --- | --- |
-| 2026-12-25 | 32.5 | 60,875.00 | 75 | 1.57 vol points |
-| 2027-01-29 | 67.5 | 61,127.50 | 85 | 0.42 vol points |
-| 2027-03-26 | 123.5 | 61,627.50 | 78 | 0.58 vol points |
+| 2026-12-25 | 32.5 | 60,875.00 | 75 | 1.86 vol points |
+| 2027-01-29 | 67.5 | 61,127.50 | 85 | 0.38 vol points |
+| 2027-03-26 | 123.5 | 61,627.50 | 78 | 0.62 vol points |
+
+Quotes are weighted by the inverse of their relative bid-ask spread, so the fit
+leans on the liquid strikes instead of treating a tight quote and a wide one as
+equally informative.
 
 The short expiry is the hard one. A five-parameter SVI cannot follow the full
 curvature of a 33-day crypto smile, and the fit leaves 1.57 vol points of RMSE.
@@ -166,6 +170,10 @@ The vectorised path takes one million prices at once:
 | --- | --- |
 | 30.2 ms | 33,087,603 |
 
+The binomial tree with 1,000 steps takes 12.5 ms. The price vector is updated
+incrementally as the tree walks back, instead of being rebuilt at every step,
+which cut the time from 31.1 ms.
+
 Out-of-sample error and bootstrap intervals on the real BTC snapshot. The model
 is fitted on two thirds of the strikes and scored on the rest:
 
@@ -185,11 +193,11 @@ same snapshot:
 
 | Expiry | SVI RMSE | SSVI RMSE |
 | --- | --- | --- |
-| 2026-12-25 | 0.015673 | 0.060504 |
-| 2027-01-29 | 0.002231 | 0.015149 |
-| 2027-03-26 | 0.003485 | 0.010816 |
+| 2026-12-25 | 0.018607 | 0.055685 |
+| 2027-01-29 | 0.002250 | 0.017037 |
+| 2027-03-26 | 0.003533 | 0.015304 |
 
-SSVI is arbitrage free with rho -0.3412, eta 1.0188 and gamma 0.5000. It fits
+SSVI is arbitrage free with rho -0.3318, eta 1.0639 and gamma 0.5000. It fits
 worse, as expected: three parameters cannot follow three independent smiles. The
 trade is consistency against accuracy, and the calibration is explicit about it.
 
@@ -237,12 +245,10 @@ moneyness: `w(k, T2) >= w(k, T1)` for `T2 > T1`.
 
 On the real snapshot the three slices are butterfly-free: zero per cent of the
 grid points violate `g >= 0`. Calendar is tighter. Fitting each expiry
-independently leaves a gap of -0.0156 between the first two expiries, so the
-short slice carries more total variance than the long one somewhere in the
-wings. The long slice is then refitted with the calendar constraint imposed by
-SLSQP instead of a penalty. The gap becomes +9.99e-15, zero to machine
-precision, and the price is a worse fit: the RMSE of the middle expiry goes from
-0.0021 to 0.0042, and the last one from 0.0035 to 0.0058.
+independently leaves a gap between the first two expiries, so the long slice is
+refitted with the constraint imposed by SLSQP. The gap becomes -8.55e-14, which
+is numerical noise, and the price is a worse fit: with weights and the hard
+constraint, the last two slices land at 0.0038 and 0.0062 of RMSE.
 
 The hard constraint is opt-in through `hard_calendar=True`. SLSQP can fail to
 converge on a difficult slice, so the default remains the soft penalty.
@@ -271,6 +277,7 @@ with explicit non-linear constraints, and it is not implemented.
 - Barrier delta, vega and theta by bump and reprice with common random numbers.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
+- Quotes weighted by the inverse relative bid-ask spread.
 - Butterfly and calendar diagnostics, plus a soft calendar penalty between
   consecutive expiries.
 - Six figures that regenerate from a script.
@@ -456,18 +463,18 @@ El repositorio incluye además un snapshot real de opciones de BTC de Binance,
 capturado el 22/11/2026 con el índice en 60.637,68 USDT. Son 446 cotizaciones en
 tres vencimientos. El forward de cada vencimiento sale de la paridad put-call con
 tipo cero, y el SVI se ajusta directamente a las volatilidades implícitas del
-mercado. El RMSE va de 0,21 puntos de volatilidad en el vencimiento a 67 días a
-1,57 puntos en el de 33 días. El vencimiento corto es el difícil: un SVI de cinco
-parámetros no sigue toda la curvatura de una sonrisa de cripto a un mes.
+mercado, ponderando cada cotización por la inversa de su spread relativo. El RMSE
+va de 0,38 puntos de volatilidad en el vencimiento a 67 días a 1,86 puntos en el
+de 33 días. El vencimiento corto es el difícil: un SVI de cinco parámetros no
+sigue toda la curvatura de una sonrisa de cripto a un mes.
 
 El ajuste se comprueba contra dos condiciones de no arbitraje. La de mariposa,
 con la función de Gatheral, no se viola en ningún punto de las tres slices. La de
 calendario sí: calibrando cada vencimiento por separado, la varianza total cae al
-alargar el plazo en 0,0156. Al reajustar la slice larga con la restricción
-impuesta por SLSQP, la violación desaparece, el gap queda en 9,99e-15, a cambio
-de empeorar el RMSE del vencimiento intermedio de 0,0021 a 0,0042 y el del último
-de 0,0035 a 0,0058. La restricción dura es opcional porque SLSQP puede no
-converger en una slice difícil.
+alargar el plazo. Al reajustar la slice larga con la restricción impuesta por
+SLSQP, la violación desaparece, el gap queda en -8,55e-14, a cambio de empeorar
+el ajuste: con pesos y restricción dura, los dos últimos vencimientos quedan en
+0,0038 y 0,0062 de RMSE.
 
 También hay opciones dependientes de la trayectoria. La asiática aritmética de
 referencia vale 5,797045 con un error estándar de 0,017937, muy por debajo de la
@@ -504,9 +511,9 @@ Eso no es un fallo del código: cinco parámetros no quedan identificados por un
 docena de cotizaciones, y `a` y `b` se compensan.
 
 También hay un ajuste SSVI de superficie completa con tres parámetros globales.
-En el mismo snapshot queda libre de arbitraje, con rho -0,3412, eta 1,0188 y
-gamma 0,5000, pero ajusta peor que un SVI por vencimiento: 6,05 puntos de RMSE en
-el plazo corto frente a 1,57. Es el intercambio entre consistencia y precisión, y
+En el mismo snapshot queda libre de arbitraje, con rho -0,3318, eta 1,0639 y
+gamma 0,5000, pero ajusta peor que un SVI por vencimiento: 5,57 puntos de RMSE en
+el plazo corto frente a 1,86. Es el intercambio entre consistencia y precisión, y
 está escrito tal cual.
 
 ## License
