@@ -240,3 +240,34 @@ def test_invalid_inputs() -> None:
         barrier_price("call", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0, kind="sideways")
     with pytest.raises(ValueError):
         barrier_price("straddle", SPOT, STRIKE, RATE, VOL, EXPIRY, barrier=120.0)
+
+
+def test_barrier_greeks_propagate_continuous_monitoring() -> None:
+    from options_pricer.path_dependent import barrier_greeks
+
+    discrete = barrier_greeks(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=30,
+        paths=20_000,
+        seed=5,
+    )
+    continuous = barrier_greeks(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=30,
+        paths=20_000,
+        seed=5,
+        continuous=True,
+    )
+    assert continuous.price < discrete.price

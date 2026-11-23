@@ -193,6 +193,7 @@ def barrier_greeks(
     paths: int = 200_000,
     seed: int = 42,
     bump: float = 0.01,
+    continuous: bool = False,
 ) -> PathGreeks:
     """Delta, vega and theta by bump and reprice with common random numbers.
 
@@ -218,6 +219,7 @@ def barrier_greeks(
             steps,
             paths,
             seed,
+            continuous=continuous,
         ).price
 
     base = price_at(spot, vol, expiry)

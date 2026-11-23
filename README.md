@@ -359,7 +359,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-127 tests cover:
+134 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -402,6 +402,7 @@ CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12,
 - `docs/math.md` for the formulas, the conventions and the no-arbitrage
   conditions.
 - `docs/cli.md` for every command and flag.
+- `docs/real_data.md` for the provenance and limits of the snapshots.
 - `https://ikerabad.github.io/options-pricer/` for the generated API reference.
 
 ## Development
@@ -494,7 +495,7 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 127 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 134 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del

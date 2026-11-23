@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- `--continuous` propagated to barrier Greeks.
+- Numerical regression suite with 17 frozen values.
+- `docs/real_data.md` for the snapshot provenance.
+- `scripts/check.py` to run lint, types and tests locally.
+- 134 tests.
+
 ## 0.7.0
 
 - Brownian bridge approximation for continuous barrier monitoring.

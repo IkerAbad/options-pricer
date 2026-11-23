@@ -90,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     barrier_parser.add_argument("--paths", type=int, default=100_000)
     barrier_parser.add_argument("--seed", type=int, default=42)
     barrier_parser.add_argument("--greeks", action="store_true")
+    barrier_parser.add_argument("--continuous", action="store_true")
 
     surface_parser = sub.add_parser("surface", help="calibrate a synthetic SVI smile")
     surface_parser.add_argument("--spot", type=float, default=100.0)
@@ -235,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
                 steps=args.steps,
                 paths=args.paths,
                 seed=args.seed,
+                continuous=args.continuous,
             )
             if args.json:
                 _emit({"kind": args.kind, "barrier": args.barrier, **asdict(values)})
