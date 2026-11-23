@@ -7,10 +7,12 @@ import pytest
 from options_pricer import black76
 from options_pricer.black_scholes import (
     call_price,
+    deltas,
     greeks,
     price,
     prices,
     put_price,
+    vegas,
 )
 
 SPOT = 100.0
@@ -175,3 +177,32 @@ def test_vectorised_prices_reject_non_positive_inputs() -> None:
         prices("call", 100.0, 0.0, RATE, VOL, EXPIRY)
     with pytest.raises(ValueError):
         prices("straddle", 100.0, 100.0, RATE, VOL, EXPIRY)
+
+
+def test_vectorised_deltas_match_the_scalar_version() -> None:
+    import numpy as np
+
+    spots = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
+    values = deltas("call", spots, 100.0, RATE, VOL, EXPIRY, 0.03)
+
+    for spot, value in zip(spots, values, strict=True):
+        expected = greeks("call", float(spot), 100.0, RATE, VOL, EXPIRY, 0.03).delta
+        assert value == pytest.approx(expected, abs=1e-12)
+
+
+def test_vectorised_vegas_match_the_scalar_version() -> None:
+    import numpy as np
+
+    spots = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
+    values = vegas("put", spots, 100.0, RATE, VOL, EXPIRY, 0.03)
+
+    for spot, value in zip(spots, values, strict=True):
+        expected = greeks("put", float(spot), 100.0, RATE, VOL, EXPIRY, 0.03).vega
+        assert value == pytest.approx(expected, abs=1e-10)
+
+
+def test_vectorised_greeks_reject_unknown_option_types() -> None:
+    with pytest.raises(ValueError):
+        deltas("straddle", 100.0, 100.0, RATE, VOL, EXPIRY)
+    with pytest.raises(ValueError):
+        vegas("straddle", 100.0, 100.0, RATE, VOL, EXPIRY)

@@ -180,6 +180,19 @@ it never saw. The interval for `a` hits the lower bound on two slices, which is
 the honest reading: five SVI parameters are not uniquely identified by a handful
 of quotes, and `a` and `b` trade off against each other.
 
+SSVI fits one surface with three parameters instead of five per expiry. On the
+same snapshot:
+
+| Expiry | SVI RMSE | SSVI RMSE |
+| --- | --- | --- |
+| 2026-12-25 | 0.015673 | 0.060504 |
+| 2027-01-29 | 0.002231 | 0.015149 |
+| 2027-03-26 | 0.003485 | 0.010816 |
+
+SSVI is arbitrage free with rho -0.3412, eta 1.0188 and gamma 0.5000. It fits
+worse, as expected: three parameters cannot follow three independent smiles. The
+trade is consistency against accuracy, and the calibration is explicit about it.
+
 ## Path-dependent options
 
 Asian and barrier options are priced by Monte Carlo over full price paths. The
@@ -242,6 +255,7 @@ with explicit non-linear constraints, and it is not implemented.
 - Black-Scholes prices and first and second order Greeks for European calls and
   puts.
 - Vectorised Black-Scholes prices for arrays of spot and strike.
+- Vectorised deltas and vegas for arrays.
 - Black-76 prices, forward Greeks and implied volatility for options on a
   forward.
 - Monte Carlo under the exact lognormal terminal distribution, not an Euler
@@ -333,7 +347,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-108 tests cover:
+117 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -467,7 +481,7 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 108 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 117 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del
@@ -488,6 +502,12 @@ siempre cerca del de entrenamiento. Los intervalos bootstrap de los parámetros
 SVI se solapan entre sí y el de `a` toca la cota inferior en dos vencimientos.
 Eso no es un fallo del código: cinco parámetros no quedan identificados por una
 docena de cotizaciones, y `a` y `b` se compensan.
+
+También hay un ajuste SSVI de superficie completa con tres parámetros globales.
+En el mismo snapshot queda libre de arbitraje, con rho -0,3412, eta 1,0188 y
+gamma 0,5000, pero ajusta peor que un SVI por vencimiento: 6,05 puntos de RMSE en
+el plazo corto frente a 1,57. Es el intercambio entre consistencia y precisión, y
+está escrito tal cual.
 
 ## License
 

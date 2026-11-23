@@ -117,16 +117,14 @@ def put_price(
     return price("put", spot, strike, rate, vol, expiry, dividend_yield)
 
 
-def prices(
-    option_type: OptionType,
+def _array_setup(
     spot: object,
     strike: object,
     rate: float,
     vol: float,
     expiry: float,
-    dividend_yield: float = 0.0,
-) -> np.ndarray:
-    """Vectorised price for arrays of spot and strike. Broadcasting applies."""
+    dividend_yield: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
     spot_array = np.asarray(spot, dtype=float)
     strike_array = np.asarray(strike, dtype=float)
 
@@ -140,6 +138,22 @@ def prices(
     sqrt_t = math.sqrt(expiry)
     carry = rate - dividend_yield
     d1 = (np.log(spot_array / strike_array) + (carry + 0.5 * vol * vol) * expiry) / (vol * sqrt_t)
+    return d1, spot_array, strike_array, sqrt_t
+
+
+def prices(
+    option_type: OptionType,
+    spot: object,
+    strike: object,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float = 0.0,
+) -> np.ndarray:
+    """Vectorised price for arrays of spot and strike. Broadcasting applies."""
+    d1, spot_array, strike_array, sqrt_t = _array_setup(
+        spot, strike, rate, vol, expiry, dividend_yield
+    )
     d2 = d1 - vol * sqrt_t
 
     discount_r = math.exp(-rate * expiry)
@@ -150,6 +164,45 @@ def prices(
     if option_type == "put":
         return strike_array * discount_r * ndtr(-d2) - spot_array * discount_q * ndtr(-d1)
     raise ValueError("option_type must be 'call' or 'put'")
+
+
+def deltas(
+    option_type: OptionType,
+    spot: object,
+    strike: object,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float = 0.0,
+) -> np.ndarray:
+    """Vectorised delta, consistent with the scalar Greeks."""
+    d1, _, _, _ = _array_setup(spot, strike, rate, vol, expiry, dividend_yield)
+    discount_q = math.exp(-dividend_yield * expiry)
+
+    if option_type == "call":
+        return discount_q * ndtr(d1)
+    if option_type == "put":
+        return -discount_q * ndtr(-d1)
+    raise ValueError("option_type must be 'call' or 'put'")
+
+
+def vegas(
+    option_type: OptionType,
+    spot: object,
+    strike: object,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float = 0.0,
+) -> np.ndarray:
+    """Vectorised vega per unit of volatility, consistent with the scalar Greeks."""
+    d1, spot_array, _, sqrt_t = _array_setup(spot, strike, rate, vol, expiry, dividend_yield)
+    discount_q = math.exp(-dividend_yield * expiry)
+    density = np.exp(-0.5 * d1 * d1) / math.sqrt(2.0 * math.pi)
+
+    if option_type not in ("call", "put"):
+        raise ValueError("option_type must be 'call' or 'put'")
+    return spot_array * discount_q * density * sqrt_t
 
 
 def greeks(

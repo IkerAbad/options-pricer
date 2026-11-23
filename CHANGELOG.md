@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- SSVI surface calibration with three global parameters and a no-arbitrage
+  check.
+- Vectorised deltas and vegas.
+- SSVI compared against one SVI slice per expiry on the real snapshot.
+- pip cache in CI.
+- 117 tests.
+
 ## 0.3.0
 
 - Vectorised Black-Scholes prices for arrays, 33 million per second.
