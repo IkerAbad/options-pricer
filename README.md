@@ -274,12 +274,14 @@ with explicit non-linear constraints, and it is not implemented.
 - American and European prices on the same binomial tree, with the early
   exercise premium measured directly.
 - Asian and barrier options by Monte Carlo over simulated paths, with optional
-  antithetic sampling.
+  antithetic sampling and a Brownian bridge approximation for continuous
+  monitoring.
 - Barrier delta, vega and theta by bump and reprice with common random numbers.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
 - Quotes weighted by the inverse relative bid-ask spread.
 - SSVI and bootstrap intervals available from the command line.
+- A `real` command that calibrates a versioned snapshot end to end.
 - Dependency audit with pip-audit in CI.
 - Butterfly and calendar diagnostics, plus a soft calendar penalty between
   consecutive expiries.
@@ -357,7 +359,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-124 tests cover:
+127 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -492,7 +494,7 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 124 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 127 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del

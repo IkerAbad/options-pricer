@@ -322,3 +322,16 @@ def test_bootstrap_command(capsys) -> None:
     assert code == 0
     assert "samples" in out
     assert "rmse" in out
+
+
+def test_real_command(capsys) -> None:
+    from pathlib import Path
+
+    snapshot = (
+        Path(__file__).resolve().parent.parent / "data" / "binance_btc_options_2026-11-22.csv"
+    )
+    code = main(["real", "--input", str(snapshot)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "2026-12-25" in out
+    assert "60875" in out

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Brownian bridge approximation for continuous barrier monitoring.
+- `real` command to calibrate a versioned snapshot from the CLI.
+- PyPI metadata with keywords, classifiers and project URLs.
+- 127 tests.
+
 ## 0.6.0
 
 - SSVI and bootstrap intervals exposed in the CLI, with JSON output.

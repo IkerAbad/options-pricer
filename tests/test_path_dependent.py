@@ -168,6 +168,67 @@ def test_antithetic_path_count_is_even() -> None:
     assert result.paths == 10_000
 
 
+def test_continuous_monitoring_lowers_a_knock_out() -> None:
+    discrete = barrier_price(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=50_000,
+        seed=5,
+    )
+    continuous = barrier_price(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=50_000,
+        seed=5,
+        continuous=True,
+    )
+    assert continuous.price < discrete.price
+
+
+def test_continuous_knock_in_and_out_add_up_to_the_european() -> None:
+    out = barrier_price(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        steps=50,
+        paths=100_000,
+        seed=11,
+        continuous=True,
+    )
+    into = barrier_price(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        kind="up-and-in",
+        steps=50,
+        paths=100_000,
+        seed=11,
+        continuous=True,
+    )
+    european = call_price(SPOT, STRIKE, RATE, VOL, EXPIRY)
+    assert out.price + into.price == pytest.approx(european, abs=0.1)
+
+
 def test_invalid_inputs() -> None:
     with pytest.raises(ValueError):
         simulate_paths(0.0, RATE, VOL, EXPIRY)

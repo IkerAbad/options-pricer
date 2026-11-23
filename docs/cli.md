@@ -63,7 +63,9 @@ options-pricer barrier --spot 100 --strike 100 --rate 0.05 --vol 0.2 --expiry 1 
 
 Barrier option with discrete monitoring. `--kind` takes `up-and-out`,
 `up-and-in`, `down-and-out` or `down-and-in`. Add `--greeks` for delta, vega and
-theta by bump and reprice.
+theta by bump and reprice. `--continuous` uses a Brownian bridge crossing
+probability between steps, which approximates continuous monitoring without
+refining the time grid.
 
 ## surface
 
@@ -92,3 +94,13 @@ options-pricer bootstrap --spot 100 --strike 100 --rate 0.03 --vol 0.2 --expiry 
 
 Bootstrap intervals for the five SVI parameters on a synthetic smile. `--noise`
 controls the quote noise and `--seed` the resampling.
+
+## real
+
+```
+options-pricer real --input data/binance_btc_options_2026-11-22.csv
+```
+
+Calibrates every expiry in a versioned snapshot, with spread weights and the
+hard calendar constraint. Prints the forward, the number of quotes and the RMSE
+per expiry.

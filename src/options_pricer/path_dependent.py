@@ -130,8 +130,14 @@ def barrier_price(
     paths: int = 50_000,
     seed: int = 42,
     antithetic: bool = False,
+    continuous: bool = False,
 ) -> PathResult:
-    """Barrier option with discrete monitoring at the simulation steps."""
+    """Barrier option with discrete monitoring at the simulation steps.
+
+    With continuous=True the gap between steps is handled with a Brownian bridge
+    crossing probability, which approximates continuous monitoring without
+    refining the time grid.
+    """
     if kind not in BARRIER_KINDS:
         raise ValueError(f"kind must be one of {BARRIER_KINDS}")
     if barrier <= 0.0:
@@ -141,16 +147,36 @@ def barrier_price(
     path_max = matrix.max(axis=1)
     path_min = matrix.min(axis=1)
 
-    if kind == "up-and-out":
-        alive = path_max < barrier
-    elif kind == "up-and-in":
-        alive = path_max >= barrier
-    elif kind == "down-and-out":
-        alive = path_min > barrier
+    if kind.startswith("up"):
+        crossed = path_max >= barrier
     else:
-        alive = path_min <= barrier
+        crossed = path_min <= barrier
 
-    payoff = np.where(alive, _intrinsic(option_type, matrix[:, -1], strike), 0.0)
+    terminal_payoff = _intrinsic(option_type, matrix[:, -1], strike)
+    knocked_out = kind.endswith("out")
+
+    if not continuous:
+        if knocked_out:
+            weight = np.where(crossed, 0.0, 1.0)
+        else:
+            weight = np.where(crossed, 1.0, 0.0)
+    else:
+        dt = expiry / steps
+        if kind.startswith("up"):
+            log_ratio = np.log(barrier / matrix)
+        else:
+            log_ratio = np.log(matrix / barrier)
+
+        exponent = -2.0 * log_ratio[:, :-1] * log_ratio[:, 1:] / (vol * vol * dt)
+        crossing_probability = np.exp(np.clip(exponent, -700.0, 0.0))
+        survival = np.prod(1.0 - crossing_probability, axis=1)
+
+        if knocked_out:
+            weight = np.where(crossed, 0.0, survival)
+        else:
+            weight = np.where(crossed, 1.0, 1.0 - survival)
+
+    payoff = weight * terminal_payoff
     return _summarise(payoff, rate, expiry, paths, steps)
 
 

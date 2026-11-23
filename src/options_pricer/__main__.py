@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
+from pathlib import Path
 
 from . import black76
 from .american import binomial
@@ -12,11 +13,13 @@ from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
 from .monte_carlo import price_european
 from .path_dependent import asian_price, barrier_greeks, barrier_price
+from .real_data import build_slice, load_chain
 from .ssvi import calibrate_ssvi, is_arbitrage_free
 from .surface import (
     SviParams,
     bootstrap_slice,
     calibrate,
+    calibrate_from_vols,
     calibrate_surface,
     example_term_structure,
     svi_implied_vol,
@@ -109,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     bootstrap_parser.add_argument("--samples", type=int, default=100)
     bootstrap_parser.add_argument("--noise", type=float, default=0.001)
     bootstrap_parser.add_argument("--seed", type=int, default=1)
+
+    real_parser = sub.add_parser("real", help="calibrate a versioned options snapshot")
+    real_parser.add_argument("--input", type=Path, required=True)
+    real_parser.add_argument("--json", action="store_true", help="machine-readable output")
 
     args = parser.parse_args(argv)
 
@@ -313,6 +320,48 @@ def main(argv: list[str] | None = None) -> int:
         for name in ("a", "b", "rho", "m", "sigma"):
             print(f"{name:6s} [{result.lower[name]:+.6f}, {result.upper[name]:+.6f}]")
         print(f"rmse   [{result.rmse_low:.6f}, {result.rmse_high:.6f}]")
+        return 0
+
+    if args.command == "real":
+        chain = load_chain(args.input)
+        by_expiry: dict[str, list] = {}
+        for quote in chain:
+            by_expiry.setdefault(quote.expiry, []).append(quote)
+
+        ordered = sorted(by_expiry.items(), key=lambda item: item[1][0].days)
+        previous: SviParams | None = None
+        real_rows: list[dict[str, object]] = []
+
+        for expiry_label, group in ordered:
+            current = build_slice(group)
+            slice_params, rmse = calibrate_from_vols(
+                current.years,
+                current.log_moneyness,
+                current.vols,
+                initial=previous,
+                ridge=1e-2,
+                floor=previous,
+                hard_calendar=True,
+                weights=current.weights,
+            )
+            previous = slice_params
+            real_rows.append(
+                {
+                    "expiry": expiry_label,
+                    "forward": current.forward,
+                    "quotes": len(current.vols),
+                    "rmse": rmse,
+                    **slice_params.to_dict(),
+                }
+            )
+
+        if args.json:
+            _emit(real_rows)
+            return 0
+
+        print("expiry        forward   quotes      rmse")
+        for row in real_rows:
+            print(f"{row['expiry']}  {row['forward']:8.2f}  {row['quotes']:6d}  {row['rmse']:.6f}")
         return 0
 
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
