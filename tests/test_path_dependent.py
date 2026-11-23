@@ -145,6 +145,29 @@ def test_same_seed_same_price() -> None:
     assert first == second
 
 
+def test_antithetic_reduces_the_standard_error() -> None:
+    plain = asian_price("call", SPOT, STRIKE, RATE, VOL, EXPIRY, paths=20_000, seed=5)
+    anti = asian_price(
+        "call", SPOT, STRIKE, RATE, VOL, EXPIRY, paths=20_000, seed=5, antithetic=True
+    )
+    assert anti.standard_error < plain.standard_error
+
+
+def test_antithetic_path_count_is_even() -> None:
+    result = barrier_price(
+        "call",
+        SPOT,
+        STRIKE,
+        RATE,
+        VOL,
+        EXPIRY,
+        barrier=120.0,
+        paths=10_001,
+        antithetic=True,
+    )
+    assert result.paths == 10_000
+
+
 def test_invalid_inputs() -> None:
     with pytest.raises(ValueError):
         simulate_paths(0.0, RATE, VOL, EXPIRY)

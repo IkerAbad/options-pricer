@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- SSVI and bootstrap intervals exposed in the CLI, with JSON output.
+- Optional antithetic sampling for Asian and barrier options.
+- Dependency audit with pip-audit in CI.
+- `docs/cli.md` for every command and flag.
+- 124 tests.
+
 ## 0.5.0
 
 - Quotes weighted by the inverse relative bid-ask spread.

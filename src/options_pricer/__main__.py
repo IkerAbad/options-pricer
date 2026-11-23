@@ -12,11 +12,14 @@ from .black_scholes import greeks, price
 from .implied_vol import implied_volatility
 from .monte_carlo import price_european
 from .path_dependent import asian_price, barrier_greeks, barrier_price
+from .ssvi import calibrate_ssvi, is_arbitrage_free
 from .surface import (
     SviParams,
+    bootstrap_slice,
     calibrate,
     calibrate_surface,
     example_term_structure,
+    svi_implied_vol,
     synthetic_market,
     synthetic_surface,
 )
@@ -94,6 +97,18 @@ def main(argv: list[str] | None = None) -> int:
     surface_parser.add_argument(
         "--all", action="store_true", dest="full", help="calibrate four expiries"
     )
+
+    ssvi_parser = sub.add_parser("ssvi", help="calibrate a synthetic SSVI surface")
+    ssvi_parser.add_argument("--spot", type=float, default=100.0)
+    ssvi_parser.add_argument("--rate", type=float, default=0.03)
+    ssvi_parser.add_argument("--expiries", type=int, default=4)
+    ssvi_parser.add_argument("--json", action="store_true", help="machine-readable output")
+
+    bootstrap_parser = sub.add_parser("bootstrap", help="bootstrap intervals for SVI")
+    _common(bootstrap_parser)
+    bootstrap_parser.add_argument("--samples", type=int, default=100)
+    bootstrap_parser.add_argument("--noise", type=float, default=0.001)
+    bootstrap_parser.add_argument("--seed", type=int, default=1)
 
     args = parser.parse_args(argv)
 
@@ -246,15 +261,69 @@ def main(argv: list[str] | None = None) -> int:
         print(f"kind   {args.kind} at {args.barrier}")
         return 0
 
+    if args.command == "ssvi":
+        structure = example_term_structure()
+        expiries = list(structure)[: args.expiries]
+        ks_grid = [index * 0.05 - 0.4 for index in range(17)]
+        vols_by_expiry = [
+            [svi_implied_vol(k, expiry, structure[expiry]) for k in ks_grid] for expiry in expiries
+        ]
+        params, rmse, thetas = calibrate_ssvi(expiries, [ks_grid for _ in expiries], vols_by_expiry)
+
+        if args.json:
+            _emit(
+                {
+                    **params.to_dict(),
+                    "rmse": rmse,
+                    "thetas": thetas,
+                    "expiries": expiries,
+                    "arbitrage_free": is_arbitrage_free(params),
+                }
+            )
+            return 0
+
+        print(f"rho    {params.rho:.6f}")
+        print(f"eta    {params.eta:.6f}")
+        print(f"gamma  {params.gamma:.6f}")
+        print(f"rmse   {rmse:.6f}")
+        print(f"arbitrage free: {is_arbitrage_free(params)}")
+        return 0
+
+    if args.command == "bootstrap":
+        strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
+        truth = SviParams(a=0.02, b=0.15, rho=-0.4, m=-0.05, sigma=0.15)
+        prices = synthetic_market(
+            args.spot, args.rate, args.expiry, strikes, truth, noise=args.noise
+        )
+        result = bootstrap_slice(
+            args.spot,
+            args.rate,
+            args.expiry,
+            strikes,
+            prices,
+            samples=args.samples,
+            seed=args.seed,
+        )
+
+        if args.json:
+            _emit(asdict(result))
+            return 0
+
+        print(f"samples {result.samples}")
+        for name in ("a", "b", "rho", "m", "sigma"):
+            print(f"{name:6s} [{result.lower[name]:+.6f}, {result.upper[name]:+.6f}]")
+        print(f"rmse   [{result.rmse_low:.6f}, {result.rmse_high:.6f}]")
+        return 0
+
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
     truth = SviParams(a=0.02, b=0.15, rho=-0.4, m=-0.05, sigma=0.15)
 
     if args.full:
         structure = example_term_structure()
         expiries = list(structure)
-        params = [structure[expiry] for expiry in expiries]
+        surface_params = [structure[expiry] for expiry in expiries]
         quotes = synthetic_surface(
-            args.spot, args.rate, expiries, strikes, params, noise=args.noise
+            args.spot, args.rate, expiries, strikes, surface_params, noise=args.noise
         )
         rows = calibrate_surface(args.spot, args.rate, expiries, strikes, quotes)
         if args.json:

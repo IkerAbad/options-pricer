@@ -291,3 +291,34 @@ def test_surface_json_is_a_list_when_all(capsys) -> None:
     assert isinstance(payload, list)
     assert len(payload) == 4
     assert "rmse" in payload[0]
+
+
+def test_ssvi_command(capsys) -> None:
+    code = main(["ssvi"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "rho" in out and "eta" in out and "gamma" in out
+
+
+def test_bootstrap_command(capsys) -> None:
+    code = main(
+        [
+            "bootstrap",
+            "--spot",
+            "100",
+            "--strike",
+            "100",
+            "--rate",
+            "0.03",
+            "--vol",
+            "0.2",
+            "--expiry",
+            "1",
+            "--samples",
+            "20",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "samples" in out
+    assert "rmse" in out

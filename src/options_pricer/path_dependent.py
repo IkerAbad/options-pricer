@@ -46,8 +46,13 @@ def simulate_paths(
     steps: int = 100,
     paths: int = 50_000,
     seed: int = 42,
+    antithetic: bool = False,
 ) -> np.ndarray:
-    """Matrix of shape (paths, steps + 1) with the spot in column zero."""
+    """Matrix of shape (paths, steps + 1) with the spot in column zero.
+
+    With antithetic sampling the path count is rounded down to an even number,
+    because each draw is paired with its mirror image.
+    """
     if spot <= 0.0 or vol <= 0.0 or expiry <= 0.0:
         raise ValueError("spot, volatility and expiry must be positive")
     if steps < 1 or paths < 2:
@@ -55,11 +60,18 @@ def simulate_paths(
 
     dt = expiry / steps
     rng = np.random.default_rng(seed)
-    shocks = rng.standard_normal((paths, steps))
+
+    if antithetic:
+        half = paths // 2
+        base = rng.standard_normal((half, steps))
+        shocks = np.concatenate([base, -base], axis=0)
+    else:
+        shocks = rng.standard_normal((paths, steps))
+
     increments = (rate - 0.5 * vol * vol) * dt + vol * math.sqrt(dt) * shocks
     log_paths = np.cumsum(increments, axis=1)
 
-    return spot * np.exp(np.hstack([np.zeros((paths, 1), dtype=float), log_paths]))
+    return spot * np.exp(np.hstack([np.zeros((shocks.shape[0], 1), dtype=float), log_paths]))
 
 
 def _summarise(
@@ -73,7 +85,7 @@ def _summarise(
         standard_error=error,
         ci_low=estimate - 1.96 * error,
         ci_high=estimate + 1.96 * error,
-        paths=paths,
+        paths=int(discounted.size),
         steps=steps,
     )
 
@@ -96,9 +108,10 @@ def asian_price(
     steps: int = 100,
     paths: int = 50_000,
     seed: int = 42,
+    antithetic: bool = False,
 ) -> PathResult:
     """Arithmetic-average Asian option, averaging the prices after inception."""
-    matrix = simulate_paths(spot, rate, vol, expiry, steps, paths, seed)
+    matrix = simulate_paths(spot, rate, vol, expiry, steps, paths, seed, antithetic)
     average = matrix[:, 1:].mean(axis=1)
     payoff = _intrinsic(option_type, average, strike)
     return _summarise(payoff, rate, expiry, paths, steps)
@@ -116,6 +129,7 @@ def barrier_price(
     steps: int = 100,
     paths: int = 50_000,
     seed: int = 42,
+    antithetic: bool = False,
 ) -> PathResult:
     """Barrier option with discrete monitoring at the simulation steps."""
     if kind not in BARRIER_KINDS:
@@ -123,7 +137,7 @@ def barrier_price(
     if barrier <= 0.0:
         raise ValueError("barrier must be positive")
 
-    matrix = simulate_paths(spot, rate, vol, expiry, steps, paths, seed)
+    matrix = simulate_paths(spot, rate, vol, expiry, steps, paths, seed, antithetic)
     path_max = matrix.max(axis=1)
     path_min = matrix.min(axis=1)
 
