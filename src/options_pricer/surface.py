@@ -393,3 +393,116 @@ def example_term_structure() -> dict[float, SviParams]:
         1.00: SviParams(a=0.032, b=0.10, rho=-0.38, m=-0.06, sigma=0.15),
         2.00: SviParams(a=0.060, b=0.11, rho=-0.32, m=-0.08, sigma=0.18),
     }
+
+
+@dataclass(frozen=True)
+class BootstrapResult:
+    samples: int
+    lower: dict[str, float]
+    upper: dict[str, float]
+    rmse_low: float
+    rmse_high: float
+
+
+def bootstrap_slice(
+    spot: float,
+    rate: float,
+    expiry: float,
+    strikes: list[float],
+    prices: list[float],
+    option_type: OptionType = "call",
+    samples: int = 200,
+    seed: int = 1,
+    confidence: float = 0.95,
+) -> BootstrapResult:
+    """Resample the calibration residuals to put an interval around each SVI parameter.
+
+    The residuals come from the fitted model, not from the data, so this measures
+    how stable the fit is under the noise the model could not explain. It is not
+    a confidence interval for the true market parameters.
+    """
+    if samples < 10:
+        raise ValueError("at least ten samples are needed")
+
+    forward = spot * math.exp(rate * expiry)
+    fitted, _ = calibrate(spot, rate, expiry, strikes, prices, option_type)
+
+    model_prices: list[float] = []
+    for strike in strikes:
+        k = math.log(strike / forward)
+        vol = svi_implied_vol(k, expiry, fitted)
+        model_prices.append(black_scholes.price(option_type, spot, strike, rate, vol, expiry))
+
+    residuals = [quoted - model for quoted, model in zip(prices, model_prices, strict=True)]
+    rng = np.random.default_rng(seed)
+
+    collected: list[SviParams] = []
+    rmses: list[float] = []
+
+    for _ in range(samples):
+        perturbed = [max(1e-6, model + float(rng.choice(residuals))) for model in model_prices]
+        try:
+            params, rmse = calibrate(
+                spot, rate, expiry, strikes, perturbed, option_type, initial=fitted
+            )
+        except ValueError:
+            continue
+        collected.append(params)
+        rmses.append(rmse)
+
+    if len(collected) < 10:
+        raise ValueError("too few bootstrap samples converged")
+
+    tail = 100.0 * (1.0 - confidence) / 2.0
+    lower: dict[str, float] = {}
+    upper: dict[str, float] = {}
+
+    for name in ("a", "b", "rho", "m", "sigma"):
+        values = np.array([getattr(params, name) for params in collected])
+        lower[name] = float(np.percentile(values, tail))
+        upper[name] = float(np.percentile(values, 100.0 - tail))
+
+    return BootstrapResult(
+        samples=len(collected),
+        lower=lower,
+        upper=upper,
+        rmse_low=float(np.percentile(rmses, tail)),
+        rmse_high=float(np.percentile(rmses, 100.0 - tail)),
+    )
+
+
+def out_of_sample_rmse(
+    spot: float,
+    rate: float,
+    expiry: float,
+    strikes: list[float],
+    prices: list[float],
+    option_type: OptionType = "call",
+) -> tuple[float, float]:
+    """Fit on two thirds of the strikes and measure the error on the rest.
+
+    Returns (train_rmse, test_rmse) in implied volatility. The split is
+    deterministic: every third strike, ordered by strike, goes to the test set.
+    """
+    ordered = sorted(zip(strikes, prices, strict=True))
+    train = [(strike, quoted) for index, (strike, quoted) in enumerate(ordered) if index % 3 != 2]
+    test = [(strike, quoted) for index, (strike, quoted) in enumerate(ordered) if index % 3 == 2]
+
+    if len(train) < 5 or not test:
+        raise ValueError("not enough strikes to split into train and test")
+
+    train_strikes = [strike for strike, _ in train]
+    train_prices = [quoted for _, quoted in train]
+
+    params, train_rmse = calibrate(spot, rate, expiry, train_strikes, train_prices, option_type)
+
+    forward = spot * math.exp(rate * expiry)
+    errors: list[float] = []
+
+    for strike, quoted in test:
+        vol_market = implied_volatility(quoted, spot, strike, rate, expiry, option_type)
+        vol_model = svi_implied_vol(math.log(strike / forward), expiry, params)
+        errors.append((vol_model - vol_market) ** 2)
+
+    test_rmse = math.sqrt(sum(errors) / len(errors))
+    return train_rmse, test_rmse

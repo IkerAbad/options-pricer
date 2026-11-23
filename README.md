@@ -160,6 +160,26 @@ Black-Scholes throughput, 100,000 prices with strikes from 80 to 120:
 The closed form uses `math.erfc` instead of `scipy.stats.norm.cdf`. The change
 multiplied throughput by a hundred and left every price bit-for-bit identical.
 
+The vectorised path takes one million prices at once:
+
+| Time | Prices per second |
+| --- | --- |
+| 30.2 ms | 33,087,603 |
+
+Out-of-sample error and bootstrap intervals on the real BTC snapshot. The model
+is fitted on two thirds of the strikes and scored on the rest:
+
+| Expiry | Train RMSE | Test RMSE | `a` interval | `b` interval |
+| --- | --- | --- | --- | --- |
+| 2026-12-25 | 0.014913 | 0.017500 | [-0.0500, -0.0148] | [0.1324, 0.1999] |
+| 2027-01-29 | 0.002176 | 0.002023 | [-0.0500, 0.0056] | [0.1253, 0.1969] |
+| 2027-03-26 | 0.003454 | 0.003798 | [-0.0368, 0.0245] | [0.1431, 0.2084] |
+
+The test error stays close to the train error, so the fit generalises to strikes
+it never saw. The interval for `a` hits the lower bound on two slices, which is
+the honest reading: five SVI parameters are not uniquely identified by a handful
+of quotes, and `a` and `b` trade off against each other.
+
 ## Path-dependent options
 
 Asian and barrier options are priced by Monte Carlo over full price paths. The
@@ -221,6 +241,7 @@ with explicit non-linear constraints, and it is not implemented.
 
 - Black-Scholes prices and first and second order Greeks for European calls and
   puts.
+- Vectorised Black-Scholes prices for arrays of spot and strike.
 - Black-76 prices, forward Greeks and implied volatility for options on a
   forward.
 - Monte Carlo under the exact lognormal terminal distribution, not an Euler
@@ -312,7 +333,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-101 tests cover:
+108 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -342,9 +363,19 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
   knock-out adding up to the European, and reproducibility from a seed.
 - Property tests with Hypothesis: put-call parity, monotonicity in spot and
   strike, and Greek bounds over random valid inputs.
+- Vectorised prices matching the scalar version element by element.
+- Bootstrap intervals containing the point estimate and out-of-sample error
+  below the in-sample error on a synthetic smile.
 
-CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12
-and 3.13.
+CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12,
+3.13 and 3.14.
+
+## Documentation
+
+- `docs/tutorial.md` for a complete pass over the package.
+- `docs/math.md` for the formulas, the conventions and the no-arbitrage
+  conditions.
+- `https://ikerabad.github.io/options-pricer/` for the generated API reference.
 
 ## Development
 
@@ -436,7 +467,7 @@ y números aleatorios comunes: delta 0,623412, vega 33,576223 y theta -5,987842.
 No se publica gamma porque la segunda diferencia queda al nivel del ruido de
 Monte Carlo con este número de caminos.
 
-Los 101 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 108 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del
@@ -450,6 +481,13 @@ El mismo proceso se aplica a ETH, con 200 cotizaciones y un RMSE de entre 0,45 y
 1,37 puntos de volatilidad. El benchmark de calibración de una slice real da
 14,80 ms de mediana con la penalización suave y 16,44 ms con la restricción dura
 de SLSQP.
+
+La validación fuera de muestra usa dos tercios de los strikes para calibrar y el
+resto para medir. En el snapshot de BTC, el RMSE de test va de 0,0020 a 0,0175,
+siempre cerca del de entrenamiento. Los intervalos bootstrap de los parámetros
+SVI se solapan entre sí y el de `a` toca la cota inferior en dos vencimientos.
+Eso no es un fallo del código: cinco parámetros no quedan identificados por una
+docena de cotizaciones, y `a` y `b` se compensan.
 
 ## License
 

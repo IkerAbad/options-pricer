@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Vectorised Black-Scholes prices for arrays, 33 million per second.
+- Bootstrap intervals for the SVI parameters.
+- Out-of-sample validation on the real snapshot.
+- Benchmarks for the binomial tree and the path-dependent engines.
+- `docs/tutorial.md` and `docs/math.md`.
+- 108 tests.
+
 ## 0.2.0
 
 - Black-76 prices, forward Greeks and implied volatility for options on a

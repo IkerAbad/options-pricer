@@ -6,6 +6,7 @@ import pytest
 
 from options_pricer.surface import (
     SviParams,
+    bootstrap_slice,
     butterfly_g,
     butterfly_share_below_zero,
     calendar_gap,
@@ -13,6 +14,7 @@ from options_pricer.surface import (
     calibrate_from_vols,
     calibrate_surface,
     example_term_structure,
+    out_of_sample_rmse,
     svi_implied_vol,
     synthetic_market,
     synthetic_surface,
@@ -183,3 +185,33 @@ def test_hard_calendar_constraint_is_respected() -> None:
     )
 
     assert calendar_gap(short, fitted, -0.5, 0.5) >= -1e-9
+
+
+def test_bootstrap_contains_the_point_estimate() -> None:
+    quoted = synthetic_market(SPOT, RATE, EXPIRY, STRIKES, PARAMS, noise=0.001, seed=5)
+    fitted, _ = calibrate(SPOT, RATE, EXPIRY, STRIKES, quoted)
+
+    result = bootstrap_slice(SPOT, RATE, EXPIRY, STRIKES, quoted, samples=40, seed=2)
+
+    assert result.samples >= 10
+    for name in ("a", "b", "rho", "m", "sigma"):
+        assert result.lower[name] <= getattr(fitted, name) <= result.upper[name]
+
+
+def test_bootstrap_rejects_too_few_samples() -> None:
+    quoted = synthetic_market(SPOT, RATE, EXPIRY, STRIKES, PARAMS)
+    with pytest.raises(ValueError):
+        bootstrap_slice(SPOT, RATE, EXPIRY, STRIKES, quoted, samples=5)
+
+
+def test_out_of_sample_error_is_small_on_a_synthetic_smile() -> None:
+    quoted = synthetic_market(SPOT, RATE, EXPIRY, STRIKES, PARAMS, noise=0.001, seed=3)
+    train, test = out_of_sample_rmse(SPOT, RATE, EXPIRY, STRIKES, quoted)
+
+    assert train < 0.01
+    assert test < 0.02
+
+
+def test_out_of_sample_rejects_a_short_strike_list() -> None:
+    with pytest.raises(ValueError):
+        out_of_sample_rmse(SPOT, RATE, EXPIRY, STRIKES[:3], [1.0, 2.0, 3.0])

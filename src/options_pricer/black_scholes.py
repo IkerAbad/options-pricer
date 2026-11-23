@@ -18,6 +18,9 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
+from scipy.special import ndtr
+
 OptionType = Literal["call", "put"]
 
 _SQRT_2 = math.sqrt(2.0)
@@ -112,6 +115,41 @@ def put_price(
     dividend_yield: float = 0.0,
 ) -> float:
     return price("put", spot, strike, rate, vol, expiry, dividend_yield)
+
+
+def prices(
+    option_type: OptionType,
+    spot: object,
+    strike: object,
+    rate: float,
+    vol: float,
+    expiry: float,
+    dividend_yield: float = 0.0,
+) -> np.ndarray:
+    """Vectorised price for arrays of spot and strike. Broadcasting applies."""
+    spot_array = np.asarray(spot, dtype=float)
+    strike_array = np.asarray(strike, dtype=float)
+
+    if np.any(spot_array <= 0.0) or np.any(strike_array <= 0.0):
+        raise ValueError("spot and strike must be positive")
+    if vol <= 0.0:
+        raise ValueError("volatility must be positive")
+    if expiry <= 0.0:
+        raise ValueError("expiry must be positive, in years")
+
+    sqrt_t = math.sqrt(expiry)
+    carry = rate - dividend_yield
+    d1 = (np.log(spot_array / strike_array) + (carry + 0.5 * vol * vol) * expiry) / (vol * sqrt_t)
+    d2 = d1 - vol * sqrt_t
+
+    discount_r = math.exp(-rate * expiry)
+    discount_q = math.exp(-dividend_yield * expiry)
+
+    if option_type == "call":
+        return spot_array * discount_q * ndtr(d1) - strike_array * discount_r * ndtr(d2)
+    if option_type == "put":
+        return strike_array * discount_r * ndtr(-d2) - spot_array * discount_q * ndtr(-d1)
+    raise ValueError("option_type must be 'call' or 'put'")
 
 
 def greeks(

@@ -5,7 +5,13 @@ import math
 import pytest
 
 from options_pricer import black76
-from options_pricer.black_scholes import call_price, greeks, price, put_price
+from options_pricer.black_scholes import (
+    call_price,
+    greeks,
+    price,
+    prices,
+    put_price,
+)
 
 SPOT = 100.0
 STRIKE = 100.0
@@ -138,3 +144,34 @@ def test_greeks_with_dividends_match_finite_differences() -> None:
     charm_up = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY + step, dividend).delta
     charm_down = greeks("call", SPOT, STRIKE, RATE, VOL, EXPIRY - step, dividend).delta
     assert base.charm == pytest.approx(-(charm_up - charm_down) / (2.0 * step), rel=1e-3)
+
+
+def test_vectorised_prices_match_the_scalar_version() -> None:
+    import numpy as np
+
+    spots = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
+    values = prices("call", spots, 100.0, RATE, VOL, EXPIRY, 0.03)
+
+    for spot, value in zip(spots, values, strict=True):
+        assert value == pytest.approx(
+            call_price(float(spot), 100.0, RATE, VOL, EXPIRY, 0.03), abs=1e-12
+        )
+
+
+def test_vectorised_prices_broadcast() -> None:
+    import numpy as np
+
+    values = prices("put", np.array([90.0, 100.0, 110.0]), 100.0, RATE, VOL, EXPIRY)
+    assert values.shape == (3,)
+    assert all(value >= 0.0 for value in values)
+
+
+def test_vectorised_prices_reject_non_positive_inputs() -> None:
+    import numpy as np
+
+    with pytest.raises(ValueError):
+        prices("call", np.array([-1.0, 100.0]), 100.0, RATE, VOL, EXPIRY)
+    with pytest.raises(ValueError):
+        prices("call", 100.0, 0.0, RATE, VOL, EXPIRY)
+    with pytest.raises(ValueError):
+        prices("straddle", 100.0, 100.0, RATE, VOL, EXPIRY)
