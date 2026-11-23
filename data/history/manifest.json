@@ -1,0 +1,32 @@
+{
+  "captured_at": "2026-11-23T16:31:17Z",
+  "days": {
+    "2026-11-19": {
+      "file": "binance_btc_options_2026-11-19.csv",
+      "rows": 128,
+      "sha256": "cdc0a753cf792de665805d596af2d01d891986acaa3b88e921aed81d0659a99c"
+    },
+    "2026-11-20": {
+      "file": "binance_btc_options_2026-11-20.csv",
+      "rows": 151,
+      "sha256": "f2da8039952cd513a3f110b82a551fce1e54b8d80fecbf24dd5f63586a81b1bf"
+    },
+    "2026-11-21": {
+      "file": "binance_btc_options_2026-11-21.csv",
+      "rows": 162,
+      "sha256": "63c52c6c377b83a10e82a2b0c6b6c7d60d01852dfd2a8d391282670fe79e8b21"
+    },
+    "2026-11-22": {
+      "file": "binance_btc_options_2026-11-22.csv",
+      "rows": 115,
+      "sha256": "0de1c3c07e4d1ce472a26301c043be35f0366f553ccb22086bd11ea8ebcc7295"
+    },
+    "2026-11-23": {
+      "file": "binance_btc_options_2026-11-23.csv",
+      "rows": 144,
+      "sha256": "07da2818b248cf8a0a9f1d35cff4094cfaf9528d40db45cde99ec2fad513d85f"
+    }
+  },
+  "note": "Daily close and volume per instrument. Index from Binance spot BTCUSDT close.",
+  "source": "Binance Options EAPI klines, underlying BTCUSDT"
+}

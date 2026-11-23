@@ -201,6 +201,32 @@ SSVI is arbitrage free with rho -0.3318, eta 1.0639 and gamma 0.5000. It fits
 worse, as expected: three parameters cannot follow three independent smiles. The
 trade is consistency against accuracy, and the calibration is explicit about it.
 
+## Multi-day calibration
+
+Five daily BTC chains reconstructed from Binance option klines, 2026-11-19 to
+2026-11-23, with SHA-256 and provenance in `data/history/manifest.json`.
+Parameters for the 2026-12-25 expiry. RMSE in vol points.
+
+| Date | Quotes | a | b | rho | m | sigma | RMSE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-19 | 41 | 0.0027 | 0.0870 | -0.190 | 0.043 | 0.162 | 3.55 |
+| 2026-11-20 | 48 | 0.0109 | 0.0879 | -0.275 | 0.072 | 0.110 | 6.47 |
+| 2026-11-21 | 57 | 0.0218 | 0.1492 | +0.224 | -0.008 | 0.017 | 30.23 |
+| 2026-11-22 | 42 | 0.0130 | 0.1004 | -0.369 | -0.028 | 0.105 | 12.24 |
+| 2026-11-23 | 48 | -0.0251 | 0.1258 | -0.063 | 0.078 | 0.325 | 4.33 |
+
+The calibration is not stable over this series. Only `b` stays in a reasonable
+band. `a`, `rho` and `m` change sign, `sigma` varies by a factor of 19, and
+2026-11-21 ends with 30 vol points of RMSE because the smile explodes in the
+wings.
+
+The likely cause is the data, not the optimiser: daily closes are last trades,
+not mids, and each day has 41 to 57 quotes for that expiry. Five SVI parameters
+are not identified by that few points. The full analysis is in
+`docs/time_series.md`.
+
+![Multi-day calibration](docs/history_calibration.png)
+
 ## Path-dependent options
 
 Asian and barrier options are priced by Monte Carlo over full price paths. The
@@ -253,7 +279,6 @@ because the second difference is the same order as the Monte Carlo noise at
 these path counts.
 
 ## No arbitrage
-
 Two conditions are checked on every calibrated slice.
 
 **Butterfly.** Gatheral's function
@@ -306,6 +331,7 @@ with explicit non-linear constraints, and it is not implemented.
 - Barrier delta, vega and theta by bump and reprice with common random numbers.
 - SVI calibration on a versioned real snapshot of the Binance BTC options
   chain, not only on synthetic data.
+- Five daily BTC chains with a stability report that publishes the unstable days.
 - Quotes weighted by the inverse relative bid-ask spread.
 - SSVI and bootstrap intervals available from the command line.
 - A `real` command that calibrates a versioned snapshot end to end.
@@ -386,7 +412,7 @@ rows = calibrate_surface(100, 0.03, expiries, [90, 95, 100, 105, 110], quotes)
 
 ## Validation
 
-141 tests cover:
+142 tests cover:
 
 - Reference prices 10.4506 and 5.5735 with tolerance 1e-3.
 - Put-call parity to 1e-10.
@@ -430,6 +456,7 @@ CI runs the suite and rebuilds the figures on Ubuntu and Windows, Python 3.12,
   conditions.
 - `docs/cli.md` for every command and flag.
 - `docs/real_data.md` for the provenance and limits of the snapshots.
+- `docs/time_series.md` for the five-day calibration and its stability.
 - `https://ikerabad.github.io/options-pricer/` for the generated API reference.
 
 ## Development
@@ -535,7 +562,7 @@ likelihood ratio baja ese error al 2,2 %, a cambio de más tiempo y de una vega
 con más varianza. La tabla completa y la derivación están en el README y en
 `docs/math.md`.
 
-Los 141 tests cubren los precios de referencia, la paridad put-call, las griegas
+Los 142 tests cubren los precios de referencia, la paridad put-call, las griegas
 de primer y segundo orden, la convergencia del error como 1/√N, la recuperación
 de la volatilidad implícita, la calibración de una sonrisa, la estabilidad de la
 estructura temporal, las propiedades del ejercicio anticipado, la calibración del

@@ -23,7 +23,7 @@ from options_pricer.path_greeks import (
     barrier_greeks_fd,
     barrier_greeks_lr,
 )
-from options_pricer.surface import SviParams, calibrate, synthetic_market
+from options_pricer.surface import SviParams, calibrate, calibrate_from_vols, synthetic_market
 
 REFERENCE = Path(__file__).parent / "data" / "reference_values.json"
 VALUES = json.loads(REFERENCE.read_text(encoding="utf-8"))
@@ -155,3 +155,28 @@ def test_barrier_greeks() -> None:
     assert ratio.delta == pytest.approx(VALUES["barrier_lr_delta"], rel=1e-9)
     assert ratio.gamma == pytest.approx(VALUES["barrier_lr_gamma"], rel=1e-9)
     assert ratio.vega == pytest.approx(VALUES["barrier_lr_vega"], rel=1e-9)
+
+
+def test_history_snapshot_calibration() -> None:
+    from options_pricer.real_data import build_slice, load_history_day
+
+    path = Path(__file__).parent.parent / "data" / "history" / "binance_btc_options_2026-11-22.csv"
+    _, quotes = load_history_day(path)
+    group = [quote for quote in quotes if quote.expiry == "2026-12-25"]
+    current = build_slice(group)
+
+    params, rmse = calibrate_from_vols(
+        current.years,
+        current.log_moneyness,
+        current.vols,
+        ridge=1e-2,
+        weights=current.weights,
+    )
+
+    assert current.forward == pytest.approx(61_405.0, abs=0.01)
+    assert params.a == pytest.approx(0.013027329996104087, rel=1e-5)
+    assert params.b == pytest.approx(0.10042507504525912, rel=1e-5)
+    assert params.rho == pytest.approx(-0.36876238286479557, rel=1e-5)
+    assert params.m == pytest.approx(-0.028297808792024263, rel=1e-5)
+    assert params.sigma == pytest.approx(0.10515185243938024, rel=1e-5)
+    assert rmse == pytest.approx(0.12243067430732418, rel=1e-5)

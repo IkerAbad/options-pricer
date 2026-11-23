@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Five daily BTC option chains reconstructed from Binance option klines, with
+  SHA-256 and provenance in `data/history/manifest.json`.
+- SVI calibrated on every day, with the parameter evolution and smiles plotted.
+- Stability report: only `b` is moderately stable, `rho` and `sigma` are not,
+  and 2026-11-21 is an outlier with 30 vol points of RMSE.
+- Regression test for the 2026-11-22 historical snapshot.
+- 142 tests.
+
 ## 1.0.0
 
 First stable release.

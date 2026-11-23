@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import math
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from .black_scholes import OptionType
@@ -119,3 +120,36 @@ def build_slice(
         strikes=strikes,
         weights=weights,
     )
+
+
+def load_history_day(path: Path) -> tuple[str, list[Quote]]:
+    """Load one reconstructed day from `scripts/fetch_history.py`.
+
+    Prices are daily closes, so bid and ask are set to the close and the spread
+    weights fall back to the default.
+    """
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    day = rows[0]["date"]
+    day_date = datetime.strptime(day, "%Y-%m-%d")
+    quotes: list[Quote] = []
+
+    for row in rows:
+        expiry = row["expiry"]
+        days = (datetime.strptime(expiry, "%Y-%m-%d") - day_date).days
+        mid = float(row["close"])
+        if days <= 0 or mid <= 0.0:
+            continue
+        quotes.append(
+            Quote(
+                expiry=expiry,
+                days=float(days),
+                strike=float(row["strike"]),
+                side=row["side"],
+                mid=mid,
+                index=float(row["index"]),
+                bid=mid,
+                ask=mid,
+            )
+        )
+
+    return day, quotes

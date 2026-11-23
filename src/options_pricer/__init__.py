@@ -1,6 +1,6 @@
 """Option pricing with Black-Scholes, Monte Carlo, SVI and SSVI calibration."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from .american import BinomialResult, binomial
 from .black_scholes import Greeks, OptionType, deltas, greeks, price, prices, vegas
