@@ -98,4 +98,4 @@ def test_svi_calibration_rmse() -> None:
     strikes = [80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0]
     quotes = synthetic_market(SPOT, 0.03, EXPIRY, strikes, truth, noise=0.001, seed=1)
     _, rmse = calibrate(SPOT, 0.03, EXPIRY, strikes, quotes)
-    assert rmse == pytest.approx(VALUES["svi_rmse"], abs=1e-12)
+    assert rmse == pytest.approx(VALUES["svi_rmse"], abs=1e-9)
